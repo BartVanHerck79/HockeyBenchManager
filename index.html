@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bench Manager">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0B69C7">
+<title>Hockey Bench Manager</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon-v5.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16-v5.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32-v5.png">
+<link rel="icon" type="image/png" sizes="64x64" href="favicon-64-v5.png">
+<style>
+:root{
+  --bg:#F2F2F7; --surface:#FFFFFF; --fill:#EFEFF4;
+  --sep:rgba(60,60,67,.20);
+  --text:#0A0A0A; --text2:rgba(60,60,67,.62); --text3:rgba(60,60,67,.38);
+  --tint:#0B69C7; --tint-soft:rgba(11,105,199,.12);
+  --bench:#B25E00; --bench-soft:rgba(178,94,0,.12);
+  --danger:#C8102E; --danger-soft:rgba(200,16,46,.12);
+  --cg:#1E9E4A; --cg-soft:rgba(30,158,74,.16);
+  --cy:#C79100; --cy-soft:rgba(199,145,0,.18);
+  --cr:#C8102E; --cr-soft:rgba(200,16,46,.14);
+  --r:14px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#000000; --surface:#1C1C1E; --fill:#2C2C2E;
+    --sep:rgba(84,84,88,.65);
+    --text:#FFFFFF; --text2:rgba(235,235,245,.62); --text3:rgba(235,235,245,.32);
+    --tint:#4DA6FF; --tint-soft:rgba(77,166,255,.18);
+    --bench:#FFA53D; --bench-soft:rgba(255,165,61,.18);
+    --danger:#FF5A5F; --danger-soft:rgba(255,90,95,.18);
+    --cg:#3ED16A; --cg-soft:rgba(62,209,106,.2);
+    --cy:#FFD60A; --cy-soft:rgba(255,214,10,.2);
+    --cr:#FF5A5F; --cr-soft:rgba(255,90,95,.2);
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.35;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+#app{display:flex;flex-direction:column;height:100%;max-width:640px;margin:0 auto}
+
+.nav{flex:0 0 auto;position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid var(--sep);padding-top:env(safe-area-inset-top,0px)}
+.nav-row{display:flex;align-items:center;gap:6px;height:52px;padding:0 6px}
+.nav-btn{min-width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--tint);border-radius:10px}
+.nav-btn:active{background:var(--fill)}
+.nav-btn.txt{padding:0 10px;font-size:17px}
+.nav-title{flex:1;text-align:center;font-size:17px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.nav-title{display:block;min-width:0;padding:2px 4px;border-radius:9px}
+button.nav-title:active{background:var(--fill)}
+.nav-sub{display:block;font-size:12px;font-weight:400;color:var(--text2);letter-spacing:0}
+main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:26px}
+main.no-scroll{overflow:hidden;padding-bottom:0;display:flex;flex-direction:column}
+
+h1.large{font-size:32px;font-weight:700;letter-spacing:-.024em;margin:8px 16px 14px}
+.sec{margin:22px 0 7px;padding:0 16px;font-size:13px;color:var(--text2)}
+.card{background:var(--surface);border-radius:var(--r);margin:0 16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:11px 16px;position:relative;width:100%;text-align:left}
+.row + .row::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--sep)}
+.row .grow{flex:1;min-width:0}
+.row .t{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .s{font-size:13px;color:var(--text2);margin-top:2px}
+.row .v{color:var(--text2);font-size:15px}
+.chev{color:var(--text3);flex:0 0 auto}
+button.row:active{background:var(--fill)}
+.row input[type=text],.row input[type=date],.row input[type=tel]{flex:1;min-width:0;border:0;background:transparent;outline:none;text-align:right;font-size:17px}
+.row label.lbl{flex:0 0 auto;font-size:17px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:var(--r);
+  background:var(--tint);color:#fff;font-size:17px;font-weight:600;width:100%}
+.btn:active{opacity:.82}
+.btn[disabled]{opacity:.38}
+.btn.ghost{background:var(--fill);color:var(--text)}
+.btn.dngr{background:var(--danger)}
+.pad{padding:16px}
+.muted{color:var(--text2);font-size:14px;padding:0 16px;margin:8px 0}
+.empty{text-align:center;color:var(--text2);padding:52px 28px;font-size:15px}
+.seg{display:flex;background:var(--fill);border-radius:10px;padding:2px;gap:2px}
+.seg button{flex:1;height:34px;border-radius:8px;font-size:14px;font-weight:500;color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600}
+.stepper{display:flex;align-items:center;gap:2px;background:var(--fill);border-radius:9px;padding:2px}
+.stepper button{width:40px;height:32px;border-radius:7px;font-size:19px;color:var(--tint)}
+.stepper span{min-width:44px;text-align:center;font-size:16px}
+
+/* wedstrijdscherm */
+.score{flex:0 0 auto;background:var(--surface);border-bottom:.5px solid var(--sep);padding:10px 12px 12px}
+.score-top{display:flex;align-items:flex-start;justify-content:center;gap:10px;width:100%}
+.score-side{flex:1 1 0;min-width:0;text-align:center}
+.score-side .nm{font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score-side .pt{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.05}
+.score-mid{flex:0 0 auto;text-align:center}
+.clock{font-size:40px;font-weight:700;letter-spacing:-.035em;line-height:1}
+.clock.over{color:var(--danger)}
+.clock.idle{color:var(--text3)}
+.clock-sub{font-size:11.5px;color:var(--text2);margin-top:3px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--fill);color:var(--text2);margin-top:6px}
+.pill.live{background:var(--tint-soft);color:var(--tint)}
+.pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--tint)}
+.pill.paused{background:var(--bench-soft);color:var(--bench)}
+
+.sheet-scroll{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 10px 6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.pl{position:relative;background:var(--surface);border-radius:12px;padding:8px 26px 8px 9px;display:flex;gap:8px;
+  align-items:flex-start;text-align:left;width:100%;border:1.5px solid transparent;min-height:58px}
+.pl:active{transform:scale(.985)}
+.badge-wrap{position:relative;flex:0 0 32px}
+.pl .n{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:700;background:var(--fill);color:var(--text)}
+.goalbub{position:absolute;top:-5px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;
+  background:var(--cg);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  border:1.5px solid var(--surface)}
+.goalbub[hidden]{display:none}
+.subcount{position:absolute;right:6px;bottom:5px;font-size:11px;font-weight:600;color:var(--text3);
+  min-width:16px;height:16px;border-radius:99px;background:var(--fill);display:flex;align-items:center;justify-content:center}
+.pl.field{border-color:var(--tint-soft)} .pl.field .n{background:var(--tint);color:#fff}
+.pl.bench .n{background:var(--bench-soft);color:var(--bench)}
+.pl.susp.c-groen{border-color:var(--cg)} .pl.susp.c-groen .n{background:var(--cg);color:#fff}
+.pl.susp.c-geel{border-color:var(--cy)}  .pl.susp.c-geel .n{background:var(--cy);color:#000}
+.pl.out{opacity:.45} .pl.out .n{background:var(--cr);color:#fff}
+.pl .info{min-width:0;flex:1}
+.pl .nm{font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl .tm{font-size:11.5px;color:var(--text2);margin-top:2px;display:flex;gap:8px}
+.pl .tm b{font-weight:600;color:var(--tint)}
+.pl .tm .bb{color:var(--bench);font-weight:600}
+.pl .now{font-size:11px;margin-top:2px;color:var(--bench);font-weight:700}
+.pl .now.sus{color:var(--danger)}
+
+.strip{flex:0 0 auto;padding:6px 10px;border-top:.5px solid var(--sep);background:var(--bg)}
+.strip h6{margin:0 0 5px 2px;font-size:11px;font-weight:600;color:var(--text2)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.chip{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:var(--surface);border-radius:11px;padding:6px 10px;min-height:40px;border:1.5px solid transparent}
+.chip b{font-size:15px;font-weight:700}
+.chip .tt{font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+.chip.bench b{color:var(--bench)}
+.chip.sus.c-groen{background:var(--cg-soft);border-color:var(--cg)}
+.chip.sus.c-groen b,.chip.sus.c-groen .tt{color:var(--cg);font-weight:700}
+.chip.sus.c-geel{background:var(--cy-soft);border-color:var(--cy)}
+.chip.sus.c-geel b,.chip.sus.c-geel .tt{color:var(--cy);font-weight:700}
+.chip.bench.next{border-color:var(--bench);background:var(--bench-soft)}
+.pl.field.ready{border-color:var(--tint);animation:puls 1.1s ease-in-out infinite}
+@keyframes puls{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.pl.field.ready{animation:none}}
+.chip-empty{font-size:12.5px;color:var(--text3);padding:10px 2px}
+
+.dock{flex:0 0 auto;background:color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:.5px solid var(--sep);
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));display:flex;gap:8px}
+.act{flex:1;height:52px;border-radius:13px;background:var(--fill);color:var(--text);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11.5px;font-weight:600}
+.act svg{width:20px;height:20px}
+.act:active{opacity:.7}
+.act.primary{background:var(--tint);color:#fff;flex:1.25}
+.act.stop{background:var(--bench);color:#fff}
+
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60;opacity:0;transition:opacity .22s}
+.scrim.on{opacity:1}
+.modal{position:fixed;left:0;right:0;bottom:0;z-index:61;background:var(--bg);border-radius:16px 16px 0 0;
+  max-height:88%;display:flex;flex-direction:column;transform:translateY(100%);
+  transition:transform .28s cubic-bezier(.32,.72,0,1);padding-bottom:env(safe-area-inset-bottom,0px);max-width:640px;margin:0 auto}
+.modal.on{transform:translateY(0)}
+@media (prefers-reduced-motion:reduce){.modal,.scrim{transition:none}}
+.modal .hdl{width:36px;height:5px;border-radius:3px;background:var(--sep);margin:8px auto 2px;flex:0 0 auto}
+.modal .mh{display:flex;align-items:center;padding:8px 8px 6px;flex:0 0 auto}
+.modal .mh .ttl{flex:1;text-align:center;font-size:17px;font-weight:600}
+.modal .mb{overflow-y:auto;padding-bottom:16px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:13px 16px;text-align:left;background:var(--surface)}
+.opt + .opt{border-top:.5px solid var(--sep)}
+.opt:active{background:var(--fill)}
+.opt .badge{flex:0 0 34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;background:var(--fill)}
+.opt .badge.f{background:var(--tint);color:#fff}
+.opt .badge.b{background:var(--bench-soft);color:var(--bench)}
+.dot{width:12px;height:12px;border-radius:3px;flex:0 0 auto}
+.dot.groen{background:var(--cg)} .dot.geel{background:var(--cy)} .dot.rood{background:var(--cr)}
+.ta{width:100%;height:190px;font-size:12px;border-radius:12px;border:1px solid var(--sep);background:var(--surface);color:var(--text);padding:10px}
+.updbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--tint);color:#fff;font-size:14px;font-weight:600}
+.updbar button{margin-left:auto;background:rgba(255,255,255,.22);color:#fff;font-size:13px;
+  font-weight:700;padding:7px 13px;border-radius:9px}
+.updbar .x{background:none;margin-left:0;padding:7px 4px;opacity:.8;font-weight:400}
+.toast{position:fixed;left:50%;bottom:calc(94px + env(safe-area-inset-bottom,0px));transform:translate(-50%,10px);
+  background:rgba(28,28,30,.96);color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;z-index:80;
+  opacity:0;transition:.2s;pointer-events:none;max-width:88%;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+table.st{width:100%;border-collapse:collapse;font-size:14px}
+table.st th{font-size:11.5px;color:var(--text2);font-weight:500;text-align:right;padding:8px;border-bottom:.5px solid var(--sep)}
+table.st th:first-child,table.st td:first-child{text-align:left;padding-left:14px}
+table.st td{padding:9px 8px;text-align:right;border-bottom:.5px solid var(--sep)}
+table.st tr:last-child td{border-bottom:0}
+.logline{display:flex;gap:10px;padding:9px 16px;font-size:14px;align-items:baseline}
+.logline + .logline{border-top:.5px solid var(--sep)}
+.logline .lt{flex:0 0 58px;color:var(--text2);font-size:12.5px}
+.ver{text-align:center;color:var(--text3);font-size:12px;padding:18px 0 6px}
+:focus-visible{outline:2.5px solid var(--tint);outline-offset:2px;border-radius:8px}
+/* 3.0: aanmelden, laden, profiel, synchronisatie */
+.gate{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 24px calc(32px + env(safe-area-inset-bottom,0px));text-align:center}
+.gate img{width:88px;height:88px;border-radius:20px;background:#fff;box-shadow:0 1px 0 var(--sep),0 6px 18px rgba(11,105,199,.14)}
+.gate h1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:18px 0 6px}
+.gate p{color:var(--text2);font-size:15px;margin:0 0 6px;max-width:340px}
+.gate .btn{max-width:340px;margin-top:22px}
+.gate .link{color:var(--tint);font-size:15px;margin-top:16px;padding:8px}
+.gate .err{color:var(--danger);font-size:14px;margin-top:14px;max-width:340px}
+.spin{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--tint-soft);border-top-color:var(--tint);
+  animation:spin .8s linear infinite;margin-top:22px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+.nav-btn.pending{position:relative}
+.nav-btn.pending::after{content:"";position:absolute;top:9px;right:8px;width:8px;height:8px;border-radius:50%;
+  background:var(--bench);box-shadow:0 0 0 2px var(--bg)}
+.syncdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--cg)}
+.syncdot.wait{background:var(--bench)}
+.syncdot.off{background:var(--text3)}
+.logline .by{margin-left:auto;padding-left:8px;color:var(--text3);font-size:12px;white-space:nowrap}
+.row select{flex:1;min-width:0;border:0;background:transparent;outline:none;text-align:right;text-align-last:right;font-size:17px;color:var(--text);-webkit-appearance:none;appearance:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="nav"><div class="nav-row" id="nav"></div></header>
+  <main id="view"></main>
+  <footer id="dock" hidden></footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ===========================================================
+   Hockey Bench Manager — speeltijd en banktijd bij hockey
+   (vroeger Bankwacht)
+   Gemaakt voor Anneliese van KHC Dragons
+   =========================================================== */
+const APP_VERSION = "3.0.0";
+const APP_NAME = "Hockey Bench Manager";
+const DATA_VERSION = 2;
+const OLD_KEY = "bankwacht.v1";          /* opslag van Bankwacht 2.x, enkel nog om over te nemen */
+
+/* In het geheugen heten teams nog 'seasons' (zoals in 2.x), zodat de rest van de app
+   ongewijzigd kan blijven. Eén 'season' = één team in één seizoen:
+   { id, club, team, name (= seizoen, bv. "2026–2027"), roster, matches, members, admins, createdBy, created } */
+let S = { v:DATA_VERSION, seasons:[], activeSeason:null, openMatch:null, lastBackup:null };
+let USER = null;          /* aangemelde gebruiker (Firebase) */
+let PROFILE;              /* undefined = nog onbekend, null = nog geen profiel, object = { first, last, email } */
+let READY = false;        /* gegevens geladen en eerste scherm gekozen */
+let BOOT_ERR = "";
+
+/* ---------- oude gegevens (2.x) omzetten ---------- */
+function migrateData(p){
+  p.seasons = Array.isArray(p.seasons) ? p.seasons : [];
+  p.seasons.forEach(se=>{
+    const r = {};
+    Object.keys(se.roster||{}).forEach(n=>{
+      const val = se.roster[n];
+      r[n] = (typeof val === "string") ? { f:val, l:"" } : (val || { f:"", l:"" });
+    });
+    se.roster = r;
+    se.matches = Array.isArray(se.matches) ? se.matches : [];
+    se.matches.forEach(m=>{
+      Object.values(m.players||{}).forEach(p=>{
+        if(p.name !== undefined){ p.f = p.name; p.l = ""; delete p.name; }
+        if(p.f === undefined) p.f = "";
+        if(p.l === undefined) p.l = "";
+        if(p.goals === undefined) p.goals = 0;
+      });
+    });
+  });
+  p.v = DATA_VERSION;
+  return p;
+}
+
+/* ---------- toestelinstellingen (enkel op dit toestel) ---------- */
+function uiKey(){ return USER ? "hbm.ui." + USER.uid : null; }
+function uiLoad(){
+  try{ const k = uiKey(); const p = k && JSON.parse(localStorage.getItem(k) || "null"); return p || {}; }
+  catch(e){ return {}; }
+}
+function uiSave(){
+  try{
+    const k = uiKey(); if(!k) return;
+    localStorage.setItem(k, JSON.stringify({ activeSeason:S.activeSeason, openMatch:S.openMatch, lastBackup:S.lastBackup }));
+  }catch(e){}
+}
+
+/* ---------- bewaren: alles gaat naar Firestore ---------- */
+function save(now){
+  uiSave();
+  if(now){ flush(); return; }
+  clearTimeout(SYNC.timer); SYNC.timer = setTimeout(flush, 400);
+}
+window.addEventListener("pagehide", ()=> flush());
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) flush(); });
+
+/* ---------- synchronisatie ----------
+   lastSent[pad] = laatst gekende inhoud op de server (als vaste tekst).
+   Is de inhoud in de app anders, dan wordt ze geschreven. Komt er van de server iets nieuws
+   binnen en heeft dit toestel geen onbewaarde wijziging aan dat document, dan wordt het overgenomen.
+   Paden: "t/<teamId>" en "m/<teamId>/<matchId>". */
+const SYNC = { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubMatches:{}, loadedMatches:{},
+  gotTeams:false, pending:0, timer:null, errShown:false };
+
+function stable(v){
+  if(v === undefined || (typeof v === "number" && !isFinite(v))) return "null";
+  if(v === null || typeof v !== "object") return JSON.stringify(v);
+  if(Array.isArray(v)) return "[" + Array.from(v, x=> stable(x)).join(",") + "]";
+  return "{" + Object.keys(v).filter(k=> v[k] !== undefined).sort().map(k=> JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
+}
+const plain = o => JSON.parse(JSON.stringify(o));
+function teamContent(se){
+  return { id:se.id, club:se.club||"", team:se.team||"", season:se.name||"", roster:se.roster||{},
+    members:se.members||[], admins:se.admins||[], createdBy:se.createdBy||"", created:se.created||0 };
+}
+function applyTeam(se, c){
+  se.club = c.club||""; se.team = c.team||""; se.name = c.season||""; se.roster = c.roster||{};
+  se.members = c.members||[]; se.admins = c.admins||[]; se.createdBy = c.createdBy||""; se.created = c.created||0;
+  if(!Array.isArray(se.matches)) se.matches = [];
+}
+function stripMeta(d){ const o = Object.assign({}, d); delete o.updatedAt; delete o.updatedBy; return o; }
+function tsOf(x){ try{ return x && x.toMillis ? x.toMillis() : 0; }catch(e){ return 0; } }
+
+function flush(){
+  clearTimeout(SYNC.timer); SYNC.timer = null;
+  if(!USER || !window.FB || !SYNC.gotTeams) return;
+  const F = window.FB;
+  const teamSets = [], matchOps = [], teamDels = [], present = new Set();
+  S.seasons.forEach(se=>{
+    const tp = "t/" + se.id; present.add(tp);
+    const tc = teamContent(se), tj = stable(tc);
+    if(SYNC.lastSent[tp] !== tj){ teamSets.push(["set", F.doc(F.db, "teams", se.id), plain(tc)]); SYNC.lastSent[tp] = tj; }
+    (se.matches||[]).forEach(m=>{
+      const mp = "m/" + se.id + "/" + m.id; present.add(mp);
+      const mj = stable(m);
+      if(SYNC.lastSent[mp] !== mj){ matchOps.push(["set", F.doc(F.db, "teams", se.id, "matches", m.id), plain(m)]); SYNC.lastSent[mp] = mj; }
+    });
+  });
+  Object.keys(SYNC.lastSent).forEach(p=>{
+    if(present.has(p)) return;
+    const q = p.split("/");
+    if(q[0] === "m") matchOps.push(["del", F.doc(F.db, "teams", q[1], "matches", q[2])]);
+    else teamDels.push(["del", F.doc(F.db, "teams", q[1])]);
+    delete SYNC.lastSent[p]; delete SYNC.seenTs[p];
+  });
+  /* volgorde telt: eerst teams (anders mag een wedstrijd er nog niet in), dan wedstrijden, dan gewiste teams */
+  commitOps(teamSets); commitOps(matchOps); commitOps(teamDels);
+}
+function commitOps(ops){
+  const F = window.FB;
+  for(let i = 0; i < ops.length; i += 400){
+    const b = F.writeBatch(F.db);
+    ops.slice(i, i + 400).forEach(o=>{
+      if(o[0] === "set") b.set(o[1], Object.assign(o[2], { updatedAt:F.serverTimestamp(), updatedBy:USER.uid }));
+      else b.delete(o[1]);
+    });
+    SYNC.pending++; paintSync();
+    b.commit().catch(e=> syncError(e)).finally(()=>{ SYNC.pending--; paintSync(); });
+  }
+}
+function syncError(e){
+  console.warn("bewaren mislukt", e);
+  if(SYNC.errShown) return;
+  SYNC.errShown = true;
+  toast(e && e.code === "permission-denied"
+    ? "Bewaren geweigerd door de databank. Kijk de regels in Firebase na."
+    : "Bewaren in de cloud mislukt", 5000);
+}
+
+function startSync(){
+  const F = window.FB, uidNow = USER.uid;
+  SYNC.unsubUser = F.onSnapshot(F.doc(F.db, "users", uidNow), snap=>{
+    if(!USER || USER.uid !== uidNow) return;
+    if(snap.exists()){ PROFILE = snap.data(); }
+    else if(!snap.metadata.fromCache){ PROFILE = null; }
+    else return;
+    maybeRoute();
+  }, e=> bootError(e));
+  const q = F.query(F.collection(F.db, "teams"), F.where("members", "array-contains", uidNow));
+  SYNC.unsubTeams = F.onSnapshot(q, snap=>{ if(USER && USER.uid === uidNow) onTeamsSnap(snap); }, e=> bootError(e));
+}
+function stopSync(){
+  try{ SYNC.unsubUser && SYNC.unsubUser(); }catch(e){}
+  try{ SYNC.unsubTeams && SYNC.unsubTeams(); }catch(e){}
+  Object.values(SYNC.unsubMatches).forEach(u=>{ try{ u(); }catch(e){} });
+  Object.assign(SYNC, { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubMatches:{}, loadedMatches:{},
+    gotTeams:false, errShown:false });
+  clearTimeout(SYNC.timer); SYNC.timer = null;
+  S = { v:DATA_VERSION, seasons:[], activeSeason:null, openMatch:null, lastBackup:null };
+}
+function onTeamsSnap(snap){
+  const ids = new Set();
+  snap.docs.forEach(d=>{
+    ids.add(d.id);
+    if(d.metadata.hasPendingWrites) return;          /* eigen wijziging die nog onderweg is */
+    const p = "t/" + d.id, data = d.data(), ts = tsOf(data.updatedAt);
+    let se = S.seasons.find(x=> x.id === d.id);
+    if(se && SYNC.seenTs[p] === ts){ ensureMatches(d.id); return; }
+    SYNC.seenTs[p] = ts;
+    const c = stripMeta(data); c.id = d.id;
+    const tmp = { id:d.id }; applyTeam(tmp, c);
+    const j = stable(teamContent(tmp));
+    if(!se){ se = { id:d.id, matches:[] }; applyTeam(se, c); S.seasons.push(se); remoteChanged(); }
+    else if(j !== SYNC.lastSent[p]){
+      const localJ = stable(teamContent(se));
+      if(SYNC.lastSent[p] === undefined || localJ === SYNC.lastSent[p]){ applyTeam(se, c); remoteChanged(); }
+    }
+    SYNC.lastSent[p] = j;
+    ensureMatches(d.id);
+  });
+  S.seasons.slice().forEach(se=>{
+    if(!ids.has(se.id) && SYNC.lastSent["t/" + se.id] !== undefined) removeTeamLocal(se.id);
+  });
+  S.seasons.sort((a,b)=> (b.created||0) - (a.created||0));
+  SYNC.gotTeams = true;
+  maybeRoute();
+}
+function removeTeamLocal(id){
+  S.seasons = S.seasons.filter(x=> x.id !== id);
+  Object.keys(SYNC.lastSent).forEach(p=>{ if(p === "t/" + id || p.indexOf("m/" + id + "/") === 0){ delete SYNC.lastSent[p]; delete SYNC.seenTs[p]; } });
+  const u = SYNC.unsubMatches[id]; if(u){ try{ u(); }catch(e){} delete SYNC.unsubMatches[id]; }
+  if(S.activeSeason === id){ S.activeSeason = S.seasons.length ? S.seasons[0].id : null; S.openMatch = null; uiSave(); }
+  remoteChanged();
+}
+function ensureMatches(teamId){
+  if(SYNC.unsubMatches[teamId]) return;
+  const F = window.FB;
+  SYNC.unsubMatches[teamId] = F.onSnapshot(F.collection(F.db, "teams", teamId, "matches"),
+    snap=> onMatchesSnap(teamId, snap),
+    e=>{
+      console.warn("wedstrijden laden mislukt", teamId, e);
+      delete SYNC.unsubMatches[teamId];
+      SYNC.loadedMatches[teamId] = true; maybeRoute();
+      setTimeout(()=>{ if(USER && S.seasons.some(x=> x.id === teamId)) ensureMatches(teamId); }, 5000);
+    });
+}
+function onMatchesSnap(teamId, snap){
+  const se = S.seasons.find(x=> x.id === teamId); if(!se) return;
+  const ids = new Set();
+  snap.docs.forEach(d=>{
+    ids.add(d.id);
+    if(d.metadata.hasPendingWrites) return;
+    const p = "m/" + teamId + "/" + d.id, data = d.data(), ts = tsOf(data.updatedAt);
+    const i = se.matches.findIndex(x=> x.id === d.id);
+    if(i >= 0 && SYNC.seenTs[p] === ts) return;
+    SYNC.seenTs[p] = ts;
+    const c = stripMeta(data); c.id = d.id;
+    const j = stable(c);
+    if(i < 0){ se.matches.push(c); remoteChanged(); }
+    else if(j !== SYNC.lastSent[p]){
+      const localJ = stable(se.matches[i]);
+      if(SYNC.lastSent[p] === undefined || localJ === SYNC.lastSent[p]){ se.matches[i] = c; remoteChanged(); }
+    }
+    SYNC.lastSent[p] = j;
+  });
+  se.matches.slice().forEach(m=>{
+    if(!ids.has(m.id) && SYNC.lastSent["m/" + teamId + "/" + m.id] !== undefined){
+      se.matches = se.matches.filter(x=> x.id !== m.id);
+      delete SYNC.lastSent["m/" + teamId + "/" + m.id];
+      if(S.openMatch === m.id){ S.openMatch = null; uiSave(); }
+      remoteChanged();
+    }
+  });
+  se.matches.sort((a,b)=> (b.created||0) - (a.created||0));
+  SYNC.loadedMatches[teamId] = true;
+  maybeRoute();
+}
+let rrT = null;
+function remoteChanged(){
+  if(rrT) return;
+  rrT = setTimeout(()=>{
+    rrT = null;
+    if(!READY) return;
+    if(VIEW === "setup" || VIEW === "profile") return;
+    if(VIEW === "match") renderMatch(); else render();
+  }, 80);
+}
+function maybeRoute(){
+  if(READY || !USER) return;
+  if(PROFILE === undefined || !SYNC.gotTeams) return;
+  if(PROFILE === null){ if(VIEW !== "profile"){ VIEW = "profile"; render(); } return; }
+  const ui = uiLoad();
+  S.activeSeason = ui.activeSeason || null; S.openMatch = ui.openMatch || null; S.lastBackup = ui.lastBackup || null;
+  if(S.activeSeason && !season()) S.activeSeason = null;
+  if(!S.activeSeason && S.seasons.length) S.activeSeason = S.seasons[0].id;
+  const se = season();
+  if(se && !SYNC.loadedMatches[se.id]) return;
+  READY = true;
+  const cur = match();
+  VIEW = (cur && cur.status === "live") ? "match" : (se ? "season" : "home");
+  render();
+}
+function syncState(){
+  if(!navigator.onLine) return SYNC.pending ? "wait" : "off";
+  return SYNC.pending ? "busy" : "ok";
+}
+function paintSync(){
+  const st = syncState();
+  document.querySelectorAll('.nav-btn[aria-label="Menu"]').forEach(b=> b.classList.toggle("pending", st === "wait"));
+  const el = document.getElementById("syncline"); if(el) el.outerHTML = syncRow();
+}
+function syncRow(){
+  const st = syncState();
+  const txt = { ok:"Alles bewaard in de cloud", busy:"Bezig met bewaren…",
+    wait:"Geen internet: wijzigingen staan op dit toestel en gaan door zodra er verbinding is",
+    off:"Geen internet: nieuwe wijzigingen worden later doorgestuurd" }[st];
+  return '<div class="row" id="syncline"><span class="syncdot '+(st==="ok"||st==="busy"?"":st==="wait"?"wait":"off")+'"></span>'+
+         '<div class="grow"><div class="s" style="margin:0;white-space:normal">'+txt+'</div></div></div>';
+}
+window.addEventListener("online", paintSync);
+window.addEventListener("offline", paintSync);
+
+function userShort(){
+  if(!PROFILE) return "";
+  const f = (PROFILE.first||"").trim(), l = (PROFILE.last||"").trim();
+  return (f + (l ? " " + l.charAt(0).toUpperCase() + "." : "")).trim();
+}
+function userFull(){ return PROFILE ? ((PROFILE.first||"") + " " + (PROFILE.last||"")).trim() : ""; }
+const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ---------- helpers ---------- */
+const $ = (s,r)=> (r||document).querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function mmss(ms){ ms = Math.max(0, Math.round(ms/1000)); return Math.floor(ms/60) + ":" + String(ms%60).padStart(2,"0"); }
+function mmssUp(ms){ return mmss(Math.ceil(Math.max(0,ms)/1000)*1000); }
+function partLimit(m){ return m.cfg.partMin * 60000; }
+function prevPartsMs(m, upto){ let t = 0; for(let i=0;i<upto;i++) t += m.clock.parts[i] || 0; return t; }
+function overtimeText(ms){ return ms >= 1000 ? " — " + mmss(ms) + " extra tijd" : ""; }
+function hmm(ms){ const t = Math.max(0, Math.round(ms/1000)), h = Math.floor(t/3600), m = Math.floor(t%3600/60);
+  return h > 0 ? h + "u" + String(m).padStart(2,"0") : m + " min"; }
+function dateNL(iso){ if(!iso) return ""; const d = new Date(iso + "T12:00:00");
+  return isNaN(d) ? iso : d.toLocaleDateString("nl-BE",{day:"numeric",month:"short",year:"numeric"}); }
+function toast(msg, ms){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("on"), ms || 1900);
+}
+function ordinalPart(i, total){
+  if(total === 2) return (i===0?"1e":"2e") + " helft";
+  if(total === 4) return "Q" + (i+1);
+  return "Deel " + (i+1);
+}
+const svg = {
+  menu:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="23" height="23"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M15 5l-7 7 7 7"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 5l7 7-7 7"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3"/></svg>',
+  swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.2-3.2M20 16H7l3.2 3.2"/></svg>',
+  card:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.2"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18.5" cy="12" r="1.9"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M12 3.5v11"/><path d="M8.6 6.9L12 3.5l3.4 3.4"/><path d="M7 10.5H4.7v9.8h14.6v-9.8H17"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><rect x="3.5" y="3.5" width="17" height="17" rx="4.4"/><path d="M12 8.2v7.6M8.2 12h7.6"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="21" height="21"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+
+/* ---------- geluid en trilling ---------- */
+let AC = null;
+function audioOn(){
+  try{
+    if(!AC){ const C = window.AudioContext || window.webkitAudioContext; if(!C) return; AC = new C(); }
+    if(AC.state === "suspended") AC.resume();
+  }catch(e){ AC = null; }
+}
+window.addEventListener("pointerdown", audioOn, { passive:true });
+window.addEventListener("touchstart", audioOn, { passive:true });
+function beeps(){
+  if(!AC) return;
+  try{
+    const t0 = AC.currentTime;
+    [[0,880],[0.30,880],[0.60,1320]].forEach(([off,f])=>{
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = "square"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0+off);
+      g.gain.exponentialRampToValueAtTime(0.35, t0+off+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+off+0.26);
+      o.connect(g); g.connect(AC.destination);
+      o.start(t0+off); o.stop(t0+off+0.3);
+    });
+  }catch(e){}
+}
+function alarm(){
+  try{ if(navigator.vibrate) navigator.vibrate([300,120,300,120,500]); }catch(e){}
+  beeps();
+}
+
+/* ---------- installeren als app ---------- */
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); installPrompt = e; });
+window.addEventListener("appinstalled", ()=>{ installPrompt = null; toast(APP_NAME + " staat op je beginscherm"); });
+
+function isStandalone(){
+  try{ return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
+  catch(e){ return false; }
+}
+function platformKind(){
+  const ua = navigator.userAgent || "";
+  if(/iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "ios";
+  if(/Android/.test(ua)) return "android";
+  return "desktop";
+}
+async function installApp(){
+  if(installPrompt){
+    try{
+      installPrompt.prompt();
+      const r = await installPrompt.userChoice;
+      installPrompt = null;
+      closeModal();
+      if(!r || r.outcome !== "accepted") toast("Installeren geannuleerd");
+      return;
+    }catch(e){ installPrompt = null; }
+  }
+  installHelp();
+}
+function installHelp(){
+  const k = platformKind();
+  let h = "";
+  if(k === "ios"){
+    h += '<p class="muted">Op een iPhone of iPad kan een website dit niet zelf doen. Het gaat wel in vier tikken:</p>';
+    h += '<div class="card">';
+    h += '<div class="row"><span class="badge num" style="flex:0 0 28px;height:28px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:var(--tint);color:#fff;font-weight:700;font-size:14px">1</span>'+
+         '<div class="grow"><div class="t" style="font-size:15px">Open deze pagina in Safari</div><div class="s">niet in de browser binnen WhatsApp of Mail</div></div></div>';
+    h += '<div class="row"><span class="badge num" style="flex:0 0 28px;height:28px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:var(--tint);color:#fff;font-weight:700;font-size:14px">2</span>'+
+         '<div class="grow"><div class="t" style="font-size:15px">Tik op het deelicoon</div><div class="s">onderaan in de balk van Safari</div></div><span style="color:var(--tint)">'+svg.share+'</span></div>';
+    h += '<div class="row"><span class="badge num" style="flex:0 0 28px;height:28px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:var(--tint);color:#fff;font-weight:700;font-size:14px">3</span>'+
+         '<div class="grow"><div class="t" style="font-size:15px">Kies "Zet op beginscherm"</div><div class="s">even naar beneden scrollen in die lijst</div></div><span style="color:var(--tint)">'+svg.plus+'</span></div>';
+    h += '<div class="row"><span class="badge num" style="flex:0 0 28px;height:28px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:var(--tint);color:#fff;font-weight:700;font-size:14px">4</span>'+
+         '<div class="grow"><div class="t" style="font-size:15px">Tik op "Voeg toe"</div></div></div>';
+    h += '</div>';
+    h += '<p class="muted" style="margin-top:14px">De app op je beginscherm vraagt je nog één keer om aan te melden. Daarna zie je daar dezelfde teams en wedstrijden, want alles staat in de cloud.</p>';
+  } else if(k === "android"){
+    h += '<p class="muted">Je browser toont het installatievenster nu niet. Het kan ook met de hand:</p>';
+    h += '<div class="card"><div class="row"><div class="grow"><div class="t" style="font-size:15px">Open het menu van je browser</div><div class="s">de drie puntjes rechtsboven</div></div></div>'+
+         '<div class="row"><div class="grow"><div class="t" style="font-size:15px">Kies "App installeren"</div><div class="s">of "Toevoegen aan startscherm"</div></div></div></div>';
+    h += '<p class="muted" style="margin-top:14px">Lukt het niet, probeer dan Chrome. Sommige browsers ondersteunen dit niet.</p>';
+  } else {
+    h += '<p class="muted">Op een computer kan dit in Chrome en Edge: klik op het installatie-icoon rechts in de adresbalk, of open het menu en kies "Installeren". In andere browsers bestaat die mogelijkheid niet.</p>';
+  }
+  h += '<div style="height:12px"></div>';
+  openModal("Installeren als app", h);
+}
+
+/* ---------- model ---------- */
+const CARD_DEF = { groen:{label:"Groene kaart", ms:120000}, geel:{label:"Gele kaart", ms:300000}, rood:{label:"Rode kaart", ms:null} };
+function season(){ return S.seasons.find(s=>s.id===S.activeSeason) || null; }
+function match(){ const se = season(); if(!se) return null; return se.matches.find(m=>m.id===S.openMatch) || null; }
+function dispName(p){ return (p.f || "").trim() || ("speler " + p.n); }
+function fullName(p){ return ((p.f||"") + " " + (p.l||"")).trim(); }
+
+function newTeam(club, team, seasonLabel){
+  const s = { id:uid(), club, team, name:seasonLabel, created:Date.now(), roster:{}, matches:[],
+    members:[USER.uid], admins:[USER.uid], createdBy:USER.uid };
+  S.seasons.unshift(s); S.activeSeason = s.id; save(true); return s;
+}
+/* "KHC Dragons – U12 D1" */
+function teamLabel(se){ return [se.club, se.team].map(x=> (x||"").trim()).filter(Boolean).join(" – ") || "Team"; }
+/* korte naam op het scorebord en in de log: de club, anders de teamnaam */
+function usName(se){ return (se.club||"").trim() || (se.team||"").trim() || "Wij"; }
+/* seizoenen lopen van augustus tot mei; vanaf 1 juni telt het volgende seizoen */
+function seasonStartYear(d){ d = d || new Date(); return d.getMonth() >= 5 ? d.getFullYear() : d.getFullYear() - 1; }
+function seasonLabel(y){ return y + "–" + (y + 1); }
+function normName(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,""); }
+function newMatch(se, d){
+  const m = { id:uid(), date:d.date, opponent:d.opponent, venue:d.venue,
+    cfg:{ sport:d.sport, parts:d.parts, partMin:d.partMin, onField:d.onField },
+    status:"live", created:Date.now(), appVersion:APP_VERSION, createdBy:USER.uid,
+    clock:{ part:0, parts:new Array(d.parts).fill(0), running:false, since:null },
+    score:{ us:0, them:0 }, players:{}, log:[] };
+  d.squad.forEach(p=>{
+    m.players[p.n] = { n:p.n, f:p.f||"", l:p.l||"", status:p.start?"field":"bench",
+      fieldMs:0, benchMs:0, suspMs:0, subs:0, since:0, longestBench:0, cards:[], susp:null, ready:false, goals:0 };
+  });
+  se.matches.unshift(m); return m;
+}
+function elapsedPart(m,i){ const c = m.clock, b = c.parts[i]||0;
+  return (c.running && c.part===i && c.since) ? b + (Date.now()-c.since) : b; }
+function elapsedTotal(m){ let t = 0; for(let i=0;i<m.clock.parts.length;i++) t += elapsedPart(m,i); return t; }
+function liveOf(p,T){ const d = Math.max(0, T - p.since);
+  return { field:p.fieldMs + (p.status==="field"?d:0), bench:p.benchMs + (p.status==="bench"?d:0),
+           susp:p.suspMs + (p.status==="susp"?d:0), spell:d }; }
+function commit(m,p,T){
+  const d = Math.max(0, T - p.since);
+  if(p.status==="field") p.fieldMs += d;
+  else if(p.status==="bench"){ p.benchMs += d; if(d > p.longestBench) p.longestBench = d; }
+  else if(p.status==="susp") p.suspMs += d;
+  p.since = T;
+}
+function logEv(m, text){ const e = { t:elapsedTotal(m), part:m.clock.part, wall:Date.now(), text }; const by = userShort(); if(by) e.by = by; m.log.push(e); }
+function playersArr(m){ return Object.values(m.players).sort((a,b)=> (+a.n)-(+b.n) || String(a.n).localeCompare(String(b.n))); }
+function onFieldNow(m){ return playersArr(m).filter(p=>p.status==="field"); }
+/* bank: wie deze keer het langst zit staat eerst (vroegste 'since'), bij gelijkstand op rugnummer */
+function benchByWait(m){
+  return Object.values(m.players).filter(p=>p.status==="bench")
+    .sort((a,b)=> (a.since - b.since) || ((+a.n) - (+b.n)) || String(a.n).localeCompare(String(b.n)));
+}
+/* straftijd: wie het eerst terug mag staat eerst */
+function suspBySoonest(m){
+  return Object.values(m.players).filter(p=>p.status==="susp" && p.susp)
+    .sort((a,b)=> (a.susp.until - b.susp.until) || ((+a.n) - (+b.n)));
+}
+
+/* ---------- acties ---------- */
+function toggleClock(){
+  const m = match(); if(!m) return;
+  audioOn();
+  const c = m.clock;
+  if(c.running){
+    c.parts[c.part] = elapsedPart(m,c.part); c.running = false; c.since = null;
+    const inOvertime = c.parts[c.part] >= partLimit(m);
+    logEv(m, inOvertime ? "Klok gepauzeerd tijdens extra tijd" : "Klok gepauzeerd");
+    save(true); renderMatch();
+    if(inOvertime) endPrompt();
+    return;
+  }
+  c.since = Date.now(); c.running = true;
+  logEv(m, c.parts[c.part]===0 ? ordinalPart(c.part,m.cfg.parts)+" gestart" : "Klok hervat");
+  save(true); renderMatch();
+}
+function endPrompt(){
+  const m = match(), c = m.clock, last = c.part >= m.cfg.parts-1;
+  const part = ordinalPart(c.part, m.cfg.parts).toLowerCase();
+  const ot = Math.max(0, c.parts[c.part] - partLimit(m));
+  openModal("Tijd is om",
+    '<p class="muted">De reguliere tijd van de '+part+' is voorbij, er is <b class="num">'+mmss(ot)+'</b> extra tijd gespeeld. De klok staat stil.</p>'+
+    '<div class="pad"><button class="btn" onclick="'+(last?'finishMatch()':'endPart()')+'">'+
+      (last ? 'Wedstrijd beëindigen op '+m.score.us+'–'+m.score.them : 'Einde '+part)+'</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Enkel pauzeren</button></div>');
+}
+function nudgeClock(ms){
+  const m = match(); if(!m) return;
+  const c = m.clock;
+  c.parts[c.part] = Math.max(0, elapsedPart(m,c.part) + ms);
+  if(c.running) c.since = Date.now();
+  const T = elapsedTotal(m);
+  playersArr(m).forEach(p=>{ if(p.since > T) p.since = T; });
+  logEv(m, (ms>0?"+":"−") + (Math.abs(ms)>=60000 ? Math.abs(Math.round(ms/60000))+" min" : Math.abs(ms/1000)+" sec") + " op de klok");
+  save(true); paint();
+}
+function endPart(){
+  const m = match(); const c = m.clock;
+  c.parts[c.part] = elapsedPart(m,c.part); c.running = false; c.since = null;
+  const ot = c.parts[c.part] - partLimit(m);
+  logEv(m, "Einde " + ordinalPart(c.part,m.cfg.parts).toLowerCase() + overtimeText(ot));
+  if(c.part < m.cfg.parts-1) c.part++;
+  save(true); closeModal(); renderMatch();
+}
+function finishMatch(){
+  const m = match(); const T = elapsedTotal(m);
+  m.clock.parts[m.clock.part] = elapsedPart(m,m.clock.part);
+  m.clock.running = false; m.clock.since = null;
+  playersArr(m).forEach(p=> commit(m,p,T));
+  const ot = m.clock.parts[m.clock.part] - partLimit(m);
+  if(ot >= 1000) logEv(m, "Einde " + ordinalPart(m.clock.part,m.cfg.parts).toLowerCase() + overtimeText(ot));
+  m.status = "done"; m.totalMs = T;
+  logEv(m, "Wedstrijd beëindigd — " + m.score.us + "–" + m.score.them);
+  save(true); closeModal(); go("summary");
+}
+function sub(outN, inN){
+  const m = match(); const T = elapsedTotal(m);
+  const a = m.players[outN], b = m.players[inN];
+  if(!a || !b) return;
+  commit(m,a,T); commit(m,b,T);
+  a.status = "bench"; b.status = "field"; a.ready = false; b.ready = false;
+  a.subs++; b.subs++;
+  logEv(m, b.n + " " + dispName(b) + " in voor " + a.n + " " + dispName(a));
+  save(true); renderMatch();
+  toast(b.n + " in · " + a.n + " uit");
+}
+function giveCard(n, type){
+  const m = match(); const T = elapsedTotal(m), p = m.players[n], def = CARD_DEF[type];
+  commit(m,p,T);
+  p.cards.push({ type, at:T });
+  if(type === "rood"){ p.status = "out"; p.susp = null; }
+  else { p.status = "susp"; p.susp = { type, until: T + def.ms }; }
+  p.ready = false;
+  logEv(m, def.label + " voor " + p.n + " " + dispName(p) + (def.ms ? " — " + (def.ms/60000) + " min" : ""));
+  save(true); closeModal(); renderMatch();
+}
+function backFromSusp(n, toField){
+  const m = match(); const T = elapsedTotal(m), p = m.players[n];
+  commit(m,p,T); p.status = toField ? "field" : "bench"; p.susp = null; p.ready = false;
+  logEv(m, p.n + " " + dispName(p) + " terug " + (toField ? "op het veld" : "op de bank"));
+  save(true); closeModal(); renderMatch();
+}
+function goal(side, scorerN){
+  const m = match(); const se = season();
+  m.score[side]++;
+  let txt = side==="us" ? "Doelpunt " + usName(se) : "Tegendoelpunt";
+  if(scorerN){ const p = m.players[scorerN]; if(p){ p.goals = (p.goals||0)+1; txt += " — " + p.n + " " + dispName(p); } }
+  logEv(m, txt + " (" + m.score.us + "–" + m.score.them + ")");
+  save(true); closeModal(); renderMatch();
+}
+function unGoal(side, scorerN){
+  const m = match(); if(m.score[side] <= 0) return;
+  m.score[side]--;
+  if(scorerN && m.players[scorerN] && m.players[scorerN].goals > 0) m.players[scorerN].goals--;
+  logEv(m, "Doelpunt gecorrigeerd (" + m.score.us + "–" + m.score.them + ")");
+  save(true); closeModal(); renderMatch();
+}
+function setName(n, f, l){
+  const m = match(), se = season(), p = m.players[n];
+  p.f = f.trim(); p.l = l.trim();
+  se.roster[n] = { f:p.f, l:p.l };
+  save(true); closeModal(); renderMatch();
+}
+
+/* ---------- sheets ---------- */
+function openModal(title, body, opts){
+  closeModal(true);
+  const scrim = document.createElement("div"); scrim.className = "scrim"; scrim.id = "scrim";
+  const mo = document.createElement("div"); mo.className = "modal"; mo.id = "modal";
+  mo.setAttribute("role","dialog"); mo.setAttribute("aria-modal","true");
+  mo.innerHTML = '<div class="hdl"></div>' +
+    (title ? '<div class="mh"><div style="width:44px"></div><div class="ttl">'+esc(title)+'</div><button class="nav-btn" data-x>'+svg.close+'</button></div>' : "") +
+    '<div class="mb">' + body + '</div>';
+  document.body.append(scrim, mo);
+  requestAnimationFrame(()=>{ scrim.classList.add("on"); mo.classList.add("on"); });
+  scrim.onclick = ()=> closeModal();
+  const x = mo.querySelector("[data-x]"); if(x) x.onclick = ()=> closeModal();
+  if(opts && opts.onMount) opts.onMount(mo);
+}
+function closeModal(instant){
+  const sc = $("#scrim"), mo = $("#modal");
+  if(!sc && !mo) return;
+  if(instant){ sc&&sc.remove(); mo&&mo.remove(); return; }
+  sc && sc.classList.remove("on"); mo && mo.classList.remove("on");
+  setTimeout(()=>{ sc&&sc.remove(); mo&&mo.remove(); }, 260);
+}
+
+/* ---------- navigatie ---------- */
+let VIEW = "home";
+function go(v){ VIEW = v; closeModal(true); render(); window.scrollTo(0,0); }
+function render(){
+  const main = $("#view");
+  main.className = (VIEW === "match") ? "no-scroll" : "";
+  $("#dock").hidden = true; $("#dock").innerHTML = "";
+  if(!USER && VIEW !== "boot") VIEW = "login";
+  if(USER && !READY && VIEW !== "profile") VIEW = "boot";
+  ({ boot:renderBoot, login:renderLogin, profile:renderProfile,
+     home:renderHome, season:renderSeason, setup:renderSetup, match:renderMatch,
+     summary:renderSummary, seasonstats:renderSeasonStats }[VIEW] || renderHome)();
+  paintSync();
+}
+function nav(h){ $("#nav").innerHTML = h; }
+function navTitle(t, sub, act){
+  const inner = esc(t) + (sub ? '<span class="nav-sub">'+esc(sub)+'</span>' : '');
+  return act ? '<button class="nav-title" onclick="'+act+'">'+inner+'</button>'
+             : '<div class="nav-title">'+inner+'</div>';
+}
+function backBtn(v){ return '<button class="nav-btn" onclick="go(\''+v+'\')">'+svg.back+'</button>'; }
+function menuBtn(){ return '<button class="nav-btn'+(syncState()==="wait"?" pending":"")+'" onclick="openMenu()" aria-label="Menu">'+svg.menu+'</button>'; }
+
+/* ---------- menu ---------- */
+function openMenu(){
+  const se = season();
+  let h = '<div class="card" style="margin-bottom:14px">';
+  h += '<button class="row" onclick="closeModal();go(\'profile\')"><div class="grow"><div class="t">'+esc(userFull() || "Je profiel")+'</div>'+
+       '<div class="s">'+esc((USER && USER.email) || "")+'</div></div><span class="chev">'+svg.chev+'</span></button>';
+  h += syncRow();
+  h += '</div><div class="card" style="margin-bottom:14px">';
+  h += '<button class="row" onclick="closeModal();go(\'home\')"><div class="grow"><div class="t">Teams</div><div class="s">'+S.seasons.length+' in totaal</div></div><span class="chev">'+svg.chev+'</span></button>';
+  if(se){
+    h += '<button class="row" onclick="closeModal();go(\'season\')"><div class="grow"><div class="t">'+esc(teamLabel(se))+'</div><div class="s">'+esc(se.name)+' · '+se.matches.length+' wedstrijden</div></div><span class="chev">'+svg.chev+'</span></button>';
+    h += '<button class="row" onclick="closeModal();go(\'seasonstats\')"><div class="grow"><div class="t">Seizoenstotalen</div></div><span class="chev">'+svg.chev+'</span></button>';
+    h += '<button class="row" onclick="editRoster()"><div class="grow"><div class="t">Spelersbestand</div><div class="s">'+Object.keys(se.roster).length+' namen bewaard</div></div><span class="chev">'+svg.chev+'</span></button>';
+  }
+  h += '</div><div class="card">';
+  if(!isStandalone()){
+    const k = platformKind();
+    h += '<button class="row" onclick="installApp()"><div class="grow"><div class="t">Installeer als app</div><div class="s">'+
+      (installPrompt ? "in één tik op je beginscherm"
+        : k === "ios" ? "via het deelmenu van Safari, met uitleg"
+        : k === "android" ? "op je startscherm zetten"
+        : "in Chrome of Edge")+'</div></div><span class="chev">'+svg.chev+'</span></button>';
+  }
+  h += '<button class="row" onclick="backupSheet()"><div class="grow"><div class="t">Back-up</div><div class="s">'+
+       (S.lastBackup ? "laatst op " + dateNL(S.lastBackup) : "nog nooit gemaakt")+'</div></div><span class="chev">'+svg.chev+'</span></button>';
+  h += '<button class="row" onclick="about()"><div class="grow"><div class="t">Zo werkt de app</div></div><span class="chev">'+svg.chev+'</span></button>';
+  h += '</div>';
+  h += '<div class="card" style="margin-top:14px"><button class="row" onclick="checkForUpdate(true)">'+
+       '<div class="grow"><div class="t">'+APP_NAME+' '+APP_VERSION+'</div>'+
+       '<div class="s">tik om te controleren op een nieuwe versie</div></div></button></div>';
+  openModal("Menu", h);
+}
+function about(){
+  openModal("Zo werkt de app",
+    '<div style="padding:0 16px;font-size:15px;line-height:1.5">'+
+    '<p>Tik op een speler om te wisselen, een kaart te geven of de naam aan te passen. Alle tijden lopen op de wedstrijdklok: staat de klok stil, dan staan speeltijd en banktijd ook stil.</p>'+
+    '<p>De grote klok telt per helft af. Bij nul wordt ze rood en telt ze de extra tijd op; die komt ook in de log. Druk je tijdens de extra tijd op pauze, dan vraagt de app of je de helft wil beëindigen.</p>'+
+    '<p>Op elke spelerkaart zie je de totale veldtijd (blauw) en de totale banktijd (oranje) van deze wedstrijd. Zit iemand nu op de bank, dan staat eronder hoelang die er deze keer al zit. Rechtsonder op de kaart staat het aantal wissels, en een groen bolletje bij het rugnummer toont gemaakte doelpunten.</p>'+
+    '<p>In de balk onderaan zie je iedereen op de bank met de tijd van deze bankbeurt. Wie het langst zit staat links en is licht gemarkeerd: dat is wie als eerste terug het veld in kan. Ook bij het wisselen staat de bank in die volgorde.</p>'+
+    '<p>Een groene kaart staat op 2 minuten, een gele op 5. De strafbank krijgt de kleur van de kaart. Loopt de straf af, dan trilt en piept de telefoon en gaat de speler automatisch terug het veld in, even blauw gemarkeerd. Wil je dat niet, tik de speler dan aan en zet hem of haar op de bank.</p>'+
+    '<p>Alles wordt automatisch in de cloud bewaard onder je account. Zo zie je dezelfde teams op elk toestel waar je aanmeldt. Zonder internet werkt de app gewoon verder: wijzigingen blijven op dit toestel staan en gaan door zodra er weer verbinding is. Het oranje bolletje op de menuknop betekent dat er nog iets moet doorgaan.</p>'+
+    '<p style="color:var(--text2);border-top:.5px solid var(--sep);padding-top:12px;margin-top:16px">'+
+    'Deze app is speciaal gemaakt voor Anneliese van KHC Dragons.</p>'+
+    '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div></div>');
+}
+
+/* ---------- seizoenen ---------- */
+let homeEdit = false;
+function renderHome(){
+  nav(menuBtn() + navTitle(APP_NAME) +
+      (S.seasons.length ? '<button class="nav-btn txt" onclick="homeEdit=!homeEdit;renderHome()">'+(homeEdit?"Klaar":"Wijzig")+'</button>' : '<div style="width:44px"></div>'));
+  let h = '<h1 class="large">Teams</h1>';
+  if(!S.seasons.length){
+    const old = findOldData();
+    h += '<p class="muted" style="margin-bottom:14px">Nog geen teams. Een team hoort bij één seizoen, bijvoorbeeld KHC Dragons – U12 D1 in 2026–2027. Alle wedstrijden horen daarna bij dat team.</p>';
+    if(old){
+      const nm = old.seasons.reduce((t,x)=> t + (x.matches||[]).length, 0);
+      h += '<div class="card"><button class="row" onclick="startImport(findOldData())"><div class="grow"><div class="t">Gegevens uit Bankwacht overnemen</div>'+
+           '<div class="s" style="white-space:normal">In deze browser staan '+old.seasons.length+' seizoen'+(old.seasons.length===1?"":"en")+' en '+nm+' wedstrijd'+(nm===1?"":"en")+' van de oude app.</div></div><span class="chev">'+svg.chev+'</span></button></div>';
+    }
+    h += '<div class="card" style="margin-top:14px"><button class="row" onclick="importBackup()"><div class="grow"><div class="t">Back-up terugzetten</div>'+
+         '<div class="s" style="white-space:normal">Een back-up uit Bankwacht of uit deze app, als bestand of als tekst.</div></div><span class="chev">'+svg.chev+'</span></button></div>';
+  }else{
+    h += '<div class="card">';
+    S.seasons.forEach(s=>{
+      h += '<div class="row" style="padding-right:8px">'+
+        (homeEdit ? '<button onclick="askDelSeason(\''+s.id+'\')" style="color:#fff;background:var(--danger);width:28px;height:28px;border-radius:99px;font-weight:700;flex:0 0 28px">−</button>' : '')+
+        '<button style="flex:1;display:flex;align-items:center;text-align:left;gap:12px" onclick="'+(homeEdit?'editSeasonName':'openSeason')+'(\''+s.id+'\')">'+
+        '<span style="flex:1;min-width:0"><span style="display:block" class="t">'+esc(teamLabel(s))+'</span>'+
+        '<span class="s" style="display:block">'+esc(s.name)+' · '+s.matches.length+' wedstrijd'+(s.matches.length===1?"":"en")+'</span></span>'+
+        (s.id===S.activeSeason?'<span class="v" style="color:var(--tint);font-weight:600">actief</span>':'')+
+        '<span class="chev">'+svg.chev+'</span></button></div>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="pad"><button class="btn" onclick="askSeason()">Nieuw team</button></div>';
+  h += '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div>';
+  $("#view").innerHTML = h;
+}
+function openSeason(id){ S.activeSeason = id; save(true); go("season"); }
+function seasonOptions(sel){
+  const y = seasonStartYear(), opts = [seasonLabel(y-1), seasonLabel(y), seasonLabel(y+1)];
+  if(sel && opts.indexOf(sel) < 0) opts.unshift(sel);
+  return opts.map(o=> '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>').join("");
+}
+function askSeason(){
+  const lastClub = (S.seasons.find(x=> (x.club||"").trim()) || {}).club || "";
+  openModal("Nieuw team",
+    '<div class="card"><div class="row"><label class="lbl" for="sClub">Club</label><input type="text" id="sClub" value="'+esc(lastClub)+'" placeholder="bv. KHC Dragons" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="sTeam">Team</label><input type="text" id="sTeam" placeholder="bv. U12 D1" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="sName">Seizoen</label><select id="sName">'+seasonOptions(seasonLabel(seasonStartYear()))+'</select></div></div>'+
+    '<p class="muted">Elk seizoen krijgt een eigen team, ook als de naam hetzelfde blijft. Spelers van vorig seizoen kan je zo meteen overnemen.</p>'+
+    '<div class="pad"><button class="btn" id="sGo">Team aanmaken</button></div>',
+    { onMount(mo){
+        const c = mo.querySelector("#sClub"), t = mo.querySelector("#sTeam");
+        const fire = ()=>{
+          const club = c.value.trim(), team = t.value.trim(), nm = mo.querySelector("#sName").value;
+          if(!team){ t.focus(); toast("Geef een teamnaam"); return; }
+          const key = normName(club + team);
+          const twin = S.seasons.find(x=> x.name === nm && normName((x.club||"") + (x.team||"")) === key);
+          if(twin){ confirmTwinTeam(club, team, nm, twin); return; }
+          createTeamFlow(club, team, nm);
+        };
+        mo.querySelector("#sGo").onclick = fire;
+        [c,t].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); }));
+        setTimeout(()=>{ try{ (lastClub ? t : c).focus(); }catch(e){} }, 220);
+      }});
+}
+function confirmTwinTeam(club, team, nm, twin){
+  openModal("Dit team bestaat al",
+    '<p class="muted">Je hebt al <b>'+esc(teamLabel(twin))+'</b> in '+esc(nm)+', met '+twin.matches.length+' wedstrijd'+(twin.matches.length===1?"":"en")+'. Wil je dat team openen?</p>'+
+    '<div class="pad"><button class="btn" onclick="openSeason(\''+twin.id+'\')">Bestaand team openen</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" id="twGo">Toch een nieuw team aanmaken</button></div>',
+    { onMount(mo){ mo.querySelector("#twGo").onclick = ()=> createTeamFlow(club, team, nm); } });
+}
+function createTeamFlow(club, team, nm){
+  const s = newTeam(club, team, nm);
+  closeModal(true);
+  carryStart(s.id);
+}
+let carrySel = null;
+function carryStart(newId){
+  const others = S.seasons.filter(s=> s.id !== newId && Object.keys(s.roster||{}).length);
+  if(!others.length){ go("season"); return; }
+  if(others.length === 1){ carrySheet(newId, others[0].id); return; }
+  let h = '<p class="muted">Uit welk team wil je spelers overnemen?</p><div class="card">';
+  others.forEach(s=>{
+    h += '<button class="opt" onclick="carrySheet(\''+newId+'\',\''+s.id+'\')"><span style="flex:1">'+
+      '<span style="display:block">'+esc(teamLabel(s))+'</span>'+
+      '<span style="display:block;font-size:13px;color:var(--text2)">'+esc(s.name)+' · '+Object.keys(s.roster).length+' spelers</span></span>'+
+      '<span class="chev">'+svg.chev+'</span></button>';
+  });
+  h += '</div><div class="pad"><button class="btn ghost" onclick="closeModal();go(\'season\')">Leeg beginnen</button></div>';
+  openModal("Spelers overnemen", h);
+}
+function carrySheet(newId, srcId){
+  const src = S.seasons.find(s=>s.id===srcId);
+  if(!src){ go("season"); return; }
+  const ns = Object.keys(src.roster).sort((a,b)=>a-b);
+  carrySel = new Set(ns);
+  let h = '<p class="muted">Kies wie mee overgaat naar het nieuwe team. Je kan later altijd nummers bijzetten.</p>';
+  h += '<div class="pad" style="padding-bottom:8px;display:flex;gap:8px">'+
+       '<button class="btn ghost" id="cAll" style="height:40px;font-size:15px">Allemaal</button>'+
+       '<button class="btn ghost" id="cNone" style="height:40px;font-size:15px">Geen</button></div>';
+  h += '<div class="card">';
+  ns.forEach(n=>{
+    const r = src.roster[n] || {};
+    h += '<button class="opt" data-n="'+esc(n)+'" style="background:var(--tint-soft)">'+
+      '<span class="badge num">'+esc(n)+'</span>'+
+      '<span style="flex:1">'+esc(((r.f||"") + " " + (r.l||"")).trim() || "geen naam")+'</span>'+
+      '<span class="mk" style="color:var(--tint);font-weight:700;font-size:18px;width:20px;text-align:center">✓</span></button>';
+  });
+  h += '</div><div class="pad"><button class="btn" id="cGo"></button></div>'+
+       '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal();go(\'season\')">Leeg beginnen</button></div>';
+  openModal("Spelers overnemen", h, { onMount(mo){
+    const upd = ()=>{
+      mo.querySelector("#cGo").textContent = carrySel.size
+        ? carrySel.size + " speler" + (carrySel.size===1?"":"s") + " overnemen"
+        : "Niemand overnemen";
+      mo.querySelectorAll("[data-n]").forEach(el=>{
+        const on = carrySel.has(el.dataset.n);
+        el.style.background = on ? "var(--tint-soft)" : "var(--surface)";
+        el.querySelector(".mk").textContent = on ? "✓" : "";
+      });
+    };
+    mo.querySelectorAll("[data-n]").forEach(el=> el.onclick = ()=>{
+      const n = el.dataset.n;
+      if(carrySel.has(n)) carrySel.delete(n); else carrySel.add(n);
+      upd();
+    });
+    mo.querySelector("#cAll").onclick  = ()=>{ ns.forEach(n=>carrySel.add(n)); upd(); };
+    mo.querySelector("#cNone").onclick = ()=>{ carrySel.clear(); upd(); };
+    mo.querySelector("#cGo").onclick   = ()=> carryDo(newId, srcId);
+    upd();
+  }});
+}
+function carryDo(newId, srcId){
+  const dst = S.seasons.find(s=>s.id===newId), src = S.seasons.find(s=>s.id===srcId);
+  let k = 0;
+  if(dst && src){
+    carrySel.forEach(n=>{ const r = src.roster[n]; if(r){ dst.roster[n] = { f:r.f||"", l:r.l||"" }; k++; } });
+  }
+  save(true); closeModal(); go("season");
+  if(k) toast(k + " speler" + (k===1?"":"s") + " overgenomen");
+}
+function editSeasonName(id){
+  const s = S.seasons.find(x=>x.id===id); if(!s) return;
+  openModal("Team aanpassen",
+    '<div class="card"><div class="row"><label class="lbl" for="eClub">Club</label>'+
+    '<input type="text" id="eClub" value="'+esc(s.club||"")+'" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="eTeam">Team</label>'+
+    '<input type="text" id="eTeam" value="'+esc(s.team||"")+'" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="eSeas">Seizoen</label><select id="eSeas">'+seasonOptions(s.name)+'</select></div></div>'+
+    '<div class="pad"><button class="btn" id="eGo">Bewaren</button></div>',
+    { onMount(mo){
+        const c = mo.querySelector("#eClub"), a = mo.querySelector("#eTeam"), b = mo.querySelector("#eSeas");
+        const fire = ()=>{
+          const t = a.value.trim();
+          if(!t){ a.focus(); toast("Geef een teamnaam"); return; }
+          s.club = c.value.trim(); s.team = t; s.name = b.value || s.name;
+          save(true); closeModal(); render();
+        };
+        mo.querySelector("#eGo").onclick = fire;
+        [c,a].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); }));
+      }});
+}
+function editMatchNames(){
+  const m = match(), se = season(); if(!m || !se) return;
+  openModal("Naam aanpassen",
+    '<div class="card"><div class="row"><label class="lbl" for="mClub">Club</label>'+
+    '<input type="text" id="mClub" value="'+esc(se.club||"")+'" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="mTeam">Team</label>'+
+    '<input type="text" id="mTeam" value="'+esc(se.team||"")+'" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="mOpp">Tegenstander</label>'+
+    '<input type="text" id="mOpp" value="'+esc(m.opponent||"")+'" autocomplete="off"></div></div>'+
+    '<p class="muted">Club en team gelden voor alle wedstrijden van dit team, de tegenstander enkel voor deze wedstrijd.</p>'+
+    '<div class="pad"><button class="btn" id="mGo">Bewaren</button></div>',
+    { onMount(mo){
+        const a = mo.querySelector("#mTeam"), b = mo.querySelector("#mOpp");
+        const fire = ()=>{
+          const t = a.value.trim();
+          if(!t){ a.focus(); toast("Geef een teamnaam"); return; }
+          se.team = t; se.club = mo.querySelector("#mClub").value.trim(); m.opponent = b.value.trim();
+          save(true); closeModal(); render();
+        };
+        mo.querySelector("#mGo").onclick = fire;
+        [a,b].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); }));
+      }});
+}
+function askDelSeason(id){
+  const s = S.seasons.find(x=>x.id===id); if(!s) return;
+  openModal("Team verwijderen",
+    '<p class="muted">Je verwijdert <b>'+esc(teamLabel(s))+' ('+esc(s.name)+')</b> met '+s.matches.length+' wedstrijd'+(s.matches.length===1?"":"en")+
+    ' en alle tijden die erin staan, op alle toestellen. Dit kan niet ongedaan gemaakt worden.</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="delSeason(\''+id+'\')">Definitief verwijderen</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+}
+function delSeason(id){
+  S.seasons = S.seasons.filter(s=>s.id!==id);
+  if(S.activeSeason === id){ S.activeSeason = S.seasons.length ? S.seasons[0].id : null; S.openMatch = null; }
+  save(true); closeModal(); homeEdit = false; go("home"); toast("Team verwijderd");
+}
+
+/* ---------- seizoen ---------- */
+let seasonEdit = false;
+function renderSeason(){
+  const se = season(); if(!se) return go("home");
+  nav(menuBtn() + navTitle(teamLabel(se), se.name, "editSeasonName('"+se.id+"')") +
+      (se.matches.length ? '<button class="nav-btn txt" onclick="seasonEdit=!seasonEdit;renderSeason()">'+(seasonEdit?"Klaar":"Wijzig")+'</button>' : '<div style="width:44px"></div>'));
+  let h = '<div class="pad"><button class="btn" onclick="go(\'setup\')">Nieuwe wedstrijd</button></div>';
+  const live = se.matches.filter(m=>m.status==="live"), done = se.matches.filter(m=>m.status!=="live");
+  if(live.length){ h += '<div class="sec">Loopt nu</div><div class="card">' + live.map(matchRow).join("") + '</div>'; }
+  h += '<div class="sec">Wedstrijden</div>';
+  if(!done.length && !live.length) h += '<div class="empty">Nog geen wedstrijden voor dit team.</div>';
+  else if(done.length) h += '<div class="card">' + done.map(matchRow).join("") + '</div>';
+  h += '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div>';
+  $("#view").innerHTML = h;
+}
+function matchRow(m){
+  const vs = (m.venue==="home" ? "thuis tegen " : "uit bij ") + (m.opponent || "onbekend");
+  const sc = m.status==="live" ? "loopt" : (m.score.us + "–" + m.score.them);
+  return '<div class="row" style="padding-right:8px">'+
+    (seasonEdit ? '<button onclick="askDelMatch(\''+m.id+'\')" style="color:#fff;background:var(--danger);width:28px;height:28px;border-radius:99px;font-weight:700;flex:0 0 28px">−</button>' : '')+
+    '<button style="flex:1;display:flex;align-items:center;gap:12px;text-align:left" onclick="openMatch(\''+m.id+'\')">'+
+    '<span style="flex:1;min-width:0"><span class="t" style="display:block">'+esc(vs)+'</span>'+
+    '<span class="s" style="display:block">'+esc(dateNL(m.date))+(m.status==="live"?' · <span style="color:var(--tint);font-weight:600">bezig</span>':'')+'</span></span>'+
+    '<span class="v num" style="font-weight:600;color:var(--text)">'+sc+'</span><span class="chev">'+svg.chev+'</span></button></div>';
+}
+function openMatch(id){ S.openMatch = id; save(true); const m = match(); go(m && m.status==="live" ? "match" : "summary"); }
+function askDelMatch(id){
+  const se = season(), m = se.matches.find(x=>x.id===id); if(!m) return;
+  openModal("Wedstrijd verwijderen",
+    '<p class="muted">Je verwijdert de wedstrijd van '+esc(dateNL(m.date))+' tegen '+esc(m.opponent||"onbekend")+', met alle tijden en de log. Dit kan niet ongedaan gemaakt worden.</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="delMatch(\''+id+'\')">Definitief verwijderen</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+}
+function delMatch(id){
+  const se = season();
+  se.matches = se.matches.filter(x=>x.id!==id);
+  if(S.openMatch === id) S.openMatch = null;
+  save(true); closeModal(); go("season"); toast("Wedstrijd verwijderd");
+}
+
+/* ---------- wedstrijd opzetten ---------- */
+let setupState = null;
+function renderSetup(){
+  const se = season(); if(!se) return go("home");
+  if(!setupState){
+    const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    setupState = { date:d.toISOString().slice(0,10), opponent:"", venue:"home",
+      sport:"hockey", parts:2, partMin:35, onField:11, adv:false,
+      squad: Object.keys(se.roster).sort((a,b)=>a-b).map(n=>({ n, f:(se.roster[n]||{}).f||"", l:(se.roster[n]||{}).l||"", in:false, start:false })) };
+  }
+  const st = setupState;
+  nav(backBtn("season") + navTitle("Nieuwe wedstrijd") + '<div style="width:44px"></div>');
+
+  let h = '<div class="sec">Wedstrijd</div><div class="card">';
+  h += '<div class="row"><label class="lbl" for="opp">Tegenstander</label><input type="text" id="opp" value="'+esc(st.opponent)+'" placeholder="clubnaam" autocomplete="off"></div>';
+  h += '<div class="row"><label class="lbl" for="dt">Datum</label><input type="date" id="dt" value="'+st.date+'"></div>';
+  h += '<div class="row"><div class="grow"><div class="t">Waar</div></div><div class="seg" style="width:168px">'+
+       '<button aria-pressed="'+(st.venue==="home")+'" onclick="setupSet(\'venue\',\'home\')">Thuis</button>'+
+       '<button aria-pressed="'+(st.venue==="away")+'" onclick="setupSet(\'venue\',\'away\')">Uit</button></div></div>';
+  h += '<div class="row"><div class="grow"><div class="t">Duur per deel</div><div class="s">minuten</div></div>'+stepper("partMin",st.partMin,5,5,60)+'</div></div>';
+
+  h += '<div class="sec">Selectie van vandaag</div>';
+  h += '<p class="muted" style="margin-top:0">Tik een rugnummer aan om de speler te selecteren. De eerste '+st.onField+' worden basis, de rest bank. Tik op het label om dat om te draaien.</p>';
+  h += '<div class="card" id="squadList">';
+  st.squad.forEach((p,i)=> h += squadRowHTML(p,i));
+  h += '<div class="row" id="addRow"><input type="tel" id="newNr" inputmode="numeric" placeholder="rugnummer, dan Enter" style="text-align:left" autocomplete="off">'+
+       '<button onclick="setupAdd()" style="color:var(--tint);font-weight:600;padding:8px 10px">Voeg toe</button></div></div>';
+  h += '<p class="muted" id="cnt"></p>';
+
+  h += '<div class="sec">Geavanceerde wedstrijdinstellingen</div><div class="card">';
+  if(!st.adv){
+    h += '<button class="row" onclick="setupSet(\'adv\',true)"><div class="grow"><div class="t">Tonen</div><div class="s">'+
+         (st.sport==="hockey"?"Hockey":"Voetbal")+' · '+st.parts+' delen · '+st.onField+' spelers</div></div><span class="chev">'+svg.chev+'</span></button>';
+  }else{
+    h += '<div class="row"><div class="grow"><div class="t">Sport</div></div><div class="seg" style="width:190px">'+
+      '<button aria-pressed="'+(st.sport==="hockey")+'" onclick="setupSet(\'sport\',\'hockey\')">Hockey</button>'+
+      '<button aria-pressed="'+(st.sport==="voetbal")+'" onclick="setupSet(\'sport\',\'voetbal\')">Voetbal</button></div></div>';
+    h += '<div class="row"><div class="grow"><div class="t">Aantal delen</div></div>'+stepper("parts",st.parts,1,1,4)+'</div>';
+    h += '<div class="row"><div class="grow"><div class="t">Spelers op het veld</div></div>'+stepper("onField",st.onField,1,3,15)+'</div>';
+  }
+  h += '</div>';
+  h += '<div class="pad" id="goWrap"></div>';
+  $("#view").innerHTML = h;
+
+  $("#opp").oninput = e=>{ st.opponent = e.target.value; };
+  $("#dt").oninput  = e=>{ st.date = e.target.value; };
+  const nn = $("#newNr");
+  nn.addEventListener("keydown", e=>{ if(e.key === "Enter"){ e.preventDefault(); setupAdd(); } });
+  refreshSetupFooter();
+}
+function squadRowHTML(p,i){
+  const lbl = !p.in ? "niet geselecteerd" : (p.start ? "basis" : "bank");
+  const sty = !p.in ? "background:var(--fill);color:var(--text3)"
+            : (p.start ? "background:var(--tint-soft);color:var(--tint)" : "background:var(--bench-soft);color:var(--bench)");
+  return '<div class="row" data-idx="'+i+'">'+
+    '<button onclick="setupToggle('+i+')" style="flex:0 0 36px;height:36px;border-radius:10px;font-weight:700;font-size:16px;'+
+      (p.in?'background:var(--tint);color:#fff':'background:var(--fill);color:var(--text2)')+'">'+esc(p.n)+'</button>'+
+    '<input type="text" value="'+esc(p.f)+'" placeholder="voornaam" style="text-align:left;min-width:40px" oninput="setupName('+i+',this.value)" autocomplete="off">'+
+    '<button onclick="setupRole('+i+')" style="flex:0 0 auto;font-size:12.5px;font-weight:600;padding:7px 9px;border-radius:9px;white-space:nowrap;'+sty+'">'+lbl+'</button></div>';
+}
+function refreshSetupFooter(){
+  const st = setupState;
+  const chosen = st.squad.filter(p=>p.in).length, starters = st.squad.filter(p=>p.in&&p.start).length;
+  const c = $("#cnt"); if(c) c.textContent = chosen + " aanwezig · " + starters + " van de " + st.onField + " in de basis";
+  const ok = chosen >= st.onField && starters === st.onField;
+  const w = $("#goWrap");
+  if(w) w.innerHTML = '<button class="btn" '+(ok?"":"disabled")+' onclick="startMatch()">Wedstrijd aanmaken</button>'+
+    (ok?"":'<p class="muted" style="text-align:center;padding-top:10px">Duid '+st.onField+' basisspelers aan om te kunnen starten.</p>');
+}
+function stepper(k,v,step,min,max){
+  return '<div class="stepper"><button onclick="setupStep(\''+k+'\',-'+step+','+min+','+max+')">−</button><span class="num">'+v+'</span>'+
+         '<button onclick="setupStep(\''+k+'\','+step+','+min+','+max+')">+</button></div>';
+}
+function setupStep(k,d,min,max){ setupState[k] = Math.min(max, Math.max(min, setupState[k]+d)); renderSetup(); }
+function setupSet(k,v){ setupState[k] = v; renderSetup(); }
+function starterCount(){ return setupState.squad.filter(x=>x.in && x.start).length; }
+function autoRole(p){ p.start = starterCount() < setupState.onField; }
+function setupToggle(i){
+  const p = setupState.squad[i];
+  p.in = !p.in;
+  if(p.in) autoRole(p); else p.start = false;
+  redrawSquadRow(i);
+}
+function setupRole(i){
+  const p = setupState.squad[i];
+  if(!p.in){ p.in = true; autoRole(p); redrawSquadRow(i); return; }
+  if(!p.start && starterCount() >= setupState.onField){ toast("Al " + setupState.onField + " basisspelers gekozen"); return; }
+  p.start = !p.start;
+  redrawSquadRow(i);
+}
+function redrawSquadRow(i){
+  const row = document.querySelector('#squadList .row[data-idx="'+i+'"]');
+  if(row){ row.outerHTML = squadRowHTML(setupState.squad[i], i); }
+  refreshSetupFooter();
+}
+function setupName(i,v){ setupState.squad[i].f = v; }
+function setupAdd(){
+  const el = $("#newNr"), n = (el.value||"").trim();
+  if(!n){ el.focus(); return; }
+  if(setupState.squad.some(p=>String(p.n)===n)){ toast("Nummer " + n + " staat er al"); el.value = ""; el.focus(); return; }
+  const se = season(), r = se.roster[n] || {};
+  const np = { n, f:r.f||"", l:r.l||"", in:true, start:false };
+  setupState.squad.push(np);
+  autoRole(np);
+  const i = setupState.squad.length - 1;
+  $("#addRow").insertAdjacentHTML("beforebegin", squadRowHTML(setupState.squad[i], i));
+  el.value = ""; el.focus();
+  refreshSetupFooter();
+}
+function startMatch(){
+  const se = season(), st = setupState;
+  const squad = st.squad.filter(p=>p.in).map(p=>({ n:p.n, f:(p.f||"").trim(), l:(p.l||"").trim(), start:p.start }));
+  squad.forEach(p=>{ se.roster[p.n] = { f:p.f, l:p.l || ((se.roster[p.n]||{}).l || "") }; });
+  const m = newMatch(se, { date:st.date, opponent:(st.opponent||"").trim(), venue:st.venue,
+    sport:st.sport, parts:st.parts, partMin:st.partMin, onField:st.onField, squad });
+  logEv(m, "Wedstrijdblad klaar — " + squad.length + " spelers");
+  S.openMatch = m.id; setupState = null; save(true); go("match");
+}
+
+/* ---------- wedstrijdscherm ---------- */
+function renderMatch(){
+  const m = match(), se = season();
+  if(!m) return go("season");
+  if(m.status !== "live") return go("summary");
+  const us = usName(se), them = m.opponent || "Tegenstander";
+  const left = m.venue==="home" ? us : them, right = m.venue==="home" ? them : us;
+  const lS = m.venue==="home" ? "us" : "them", rS = m.venue==="home" ? "them" : "us";
+
+  nav(menuBtn() + navTitle(us + " – " + them, dateNL(m.date) + " · " + (m.venue==="home"?"thuis":"uit"), "editMatchNames()") +
+      '<div style="width:44px"></div>');
+
+  let h = '<div class="score"><div class="score-top">';
+  h += '<button class="score-side" onclick="goalSheet(\''+lS+'\')"><div class="nm">'+esc(left)+'</div><div class="pt num" data-sc="'+lS+'">'+m.score[lS]+'</div></button>';
+  h += '<div class="score-mid"><div class="clock num" id="clk">0:00</div><div class="clock-sub" id="clksub"></div><div id="clkpill"></div></div>';
+  h += '<button class="score-side" onclick="goalSheet(\''+rS+'\')"><div class="nm">'+esc(right)+'</div><div class="pt num" data-sc="'+rS+'">'+m.score[rS]+'</div></button>';
+  h += '</div></div>';
+
+  h += '<div class="sheet-scroll"><div class="grid">';
+  playersArr(m).forEach(p=>{
+    const cc = p.status==="susp" && p.susp ? " c-"+p.susp.type : "";
+    h += '<button class="pl '+p.status+cc+'" data-p="'+esc(p.n)+'" onclick="playerSheet(\''+esc(p.n)+'\')">'+
+      '<span class="badge-wrap"><span class="n num">'+esc(p.n)+'</span>'+
+        '<span class="goalbub num" data-g="'+esc(p.n)+'" '+(p.goals?'':'hidden')+'>'+(p.goals||0)+'</span></span>'+
+      '<span class="info"><span class="nm">'+esc(dispName(p))+'</span>'+
+        '<span class="tm num"><b data-f="'+esc(p.n)+'">0:00</b><span class="bb" data-b="'+esc(p.n)+'">0:00</span></span>'+
+        '<span class="now num" data-now="'+esc(p.n)+'" hidden></span></span>'+
+      '<span class="subcount num" data-s="'+esc(p.n)+'">'+p.subs+'</span></button>';
+  });
+  h += '</div></div><div class="strip" id="strip"></div>';
+  $("#view").innerHTML = h;
+
+  const dock = $("#dock"); dock.hidden = false; dock.className = "dock";
+  dock.innerHTML =
+    '<button class="act '+(m.clock.running?"stop":"primary")+'" onclick="toggleClock()">'+(m.clock.running?svg.pause:svg.play)+
+      '<span>'+(m.clock.running?"Pauze":(m.clock.parts[m.clock.part]?"Hervat":"Start"))+'</span></button>'+
+    '<button class="act" onclick="subSheet()">'+svg.swap+'<span>Wissel</span></button>'+
+    '<button class="act" onclick="cardSheet()">'+svg.card+'<span>Kaart</span></button>'+
+    '<button class="act" onclick="moreSheet()">'+svg.more+'<span>Meer</span></button>';
+  paint();
+}
+
+function paint(){
+  if(!READY) return;
+  const m = match(); if(!m || VIEW !== "match") return;
+  const T = elapsedTotal(m), c = m.clock, partMs = elapsedPart(m,c.part), limit = m.cfg.partMin*60000;
+  const clk = $("#clk");
+  if(!clk) return;
+  const over = partMs >= limit;
+  clk.textContent = over ? "+" + mmss(partMs - limit) : mmssUp(limit - partMs);
+  clk.className = "clock num" + (over ? " over" : (c.running ? "" : " idle"));
+  $("#clksub").textContent = ordinalPart(c.part, m.cfg.parts) + " · gespeeld " + mmss(T);
+  $("#clkpill").innerHTML = c.running ? '<span class="pill live">'+(over?"extra tijd":"loopt")+'</span>'
+    : '<span class="pill '+(partMs?"paused":"")+'">'+(partMs ? (over?"tijd om":"stil") : "klaar om te starten")+'</span>';
+
+  // het moment waarop de reguliere tijd voorbij is, één keer loggen
+  if(!Array.isArray(c.otLog)) c.otLog = [];
+  if(over && !c.otLog[c.part]){
+    c.otLog[c.part] = true;
+    m.log.push({ t: prevPartsMs(m, c.part) + limit, part: c.part, wall: Date.now(),
+      text: "Reguliere tijd " + ordinalPart(c.part, m.cfg.parts).toLowerCase() + " voorbij — extra tijd loopt" });
+    save();
+  }
+
+  let fired = null;
+  playersArr(m).forEach(p=>{
+    if(p.status === "susp" && p.susp && T >= p.susp.until){
+      const until = p.susp.until;
+      commit(m,p,until); p.status = "field"; p.since = until; p.ready = true; p.susp = null;
+      logEv(m, p.n + " " + dispName(p) + " straf afgelopen — terug het veld in");
+      fired = p;
+    }
+    if(p.ready && p.status === "field" && T - p.since > 12000) p.ready = false;
+    const L = liveOf(p,T), q = s=> document.querySelector('['+s+'="'+CSS.escape(String(p.n))+'"]');
+    const f = q("data-f"), b = q("data-b"), now = q("data-now"), sc = q("data-s"), gb = q("data-g");
+    if(f) f.textContent = mmss(L.field);
+    if(b) b.textContent = mmss(L.bench);
+    if(sc) sc.textContent = p.subs;
+    if(gb){ gb.hidden = !p.goals; gb.textContent = p.goals || 0; }
+    if(now){
+      if(p.status === "bench"){ now.hidden = false; now.className = "now num"; now.textContent = "nu " + mmss(L.spell); }
+      else if(p.status === "susp" && p.susp){ now.hidden = false; now.className = "now num sus"; now.textContent = "straf " + mmss(Math.max(0, p.susp.until - T)); }
+      else now.hidden = true;
+    }
+    const card = document.querySelector('.pl[data-p="'+CSS.escape(String(p.n))+'"]');
+    if(card){
+      const want = "pl " + p.status + (p.status==="susp" && p.susp ? " c-"+p.susp.type : "") + (p.ready && p.status==="field" ? " ready" : "");
+      if(card.className !== want) card.className = want;
+    }
+  });
+  if(fired){ save(true); alarm(); toast("Straf afgelopen — " + fired.n + " " + dispName(fired) + " staat weer op het veld", 4600); }
+
+  const strip = $("#strip");
+  const bench = benchByWait(m);
+  const susp  = suspBySoonest(m);
+  const sig = susp.map(p=>p.n+p.susp.type).join()+"|"+bench.map(p=>p.n).join();
+  if(strip.dataset.sig !== sig){
+    strip.dataset.sig = sig;
+    let sh = "";
+    if(susp.length){
+      sh += '<h6>Straftijd</h6><div class="chips">' + susp.map(p=>
+        '<button class="chip sus c-'+p.susp.type+'" onclick="playerSheet(\''+esc(p.n)+'\')"><b class="num">'+esc(p.n)+'</b><span class="tt">0:00</span></button>').join("") + '</div>';
+    }
+    sh += '<h6>Bank — ' + bench.length + (bench.length > 1 ? ' · langst eerst' : '') + '</h6><div class="chips">';
+    sh += bench.length ? bench.map((p,i)=>
+      '<button class="chip bench'+(i===0 && bench.length>1?" next":"")+'" onclick="playerSheet(\''+esc(p.n)+'\')"><b class="num">'+esc(p.n)+'</b><span class="tt">0:00</span></button>').join("")
+      : '<span class="chip-empty">Niemand op de bank.</span>';
+    sh += '</div>';
+    strip.innerHTML = sh;
+  }
+  const chips = strip.querySelectorAll(".chip");
+  let i = 0;
+  susp.forEach(p=>{ const el = chips[i++]; if(el) el.querySelector(".tt").textContent = mmss(Math.max(0, p.susp.until - T)); });
+  bench.forEach(p=>{ const el = chips[i++]; if(el) el.querySelector(".tt").textContent = mmss(liveOf(p,T).spell); });
+  document.querySelectorAll("[data-sc]").forEach(el=>{ el.textContent = m.score[el.dataset.sc]; });
+}
+
+/* ---------- speler ---------- */
+function playerSheet(n){
+  const m = match(), p = m.players[n], T = elapsedTotal(m), L = liveOf(p,T);
+  let h = '<div class="card" style="margin-bottom:14px">';
+  h += '<button class="row" onclick="nameSheet(\''+esc(p.n)+'\')"><div class="grow"><div class="t">'+esc(fullName(p) || "naam toevoegen")+'</div></div><span style="color:var(--tint)">'+svg.pen+'</span></button>';
+  h += '<div class="row"><div class="grow"><div class="t">Op het veld</div></div><div class="v num" style="color:var(--tint);font-weight:600">'+mmss(L.field)+'</div></div>';
+  h += '<div class="row"><div class="grow"><div class="t">Op de bank</div>'+(p.status==="bench"?'<div class="s">deze beurt '+mmss(L.spell)+'</div>':'')+
+       '</div><div class="v num" style="color:var(--bench);font-weight:600">'+mmss(L.bench)+'</div></div>';
+  h += '<div class="row"><div class="grow"><div class="t">Keer gewisseld</div></div><div class="v num">'+p.subs+'</div></div>';
+  if(p.goals) h += '<div class="row"><div class="grow"><div class="t">Doelpunten</div></div><div class="v num">'+p.goals+'</div></div>';
+  if(p.cards.length) h += '<div class="row"><div class="grow"><div class="t">Kaarten</div></div><div class="v">'+p.cards.map(c=>CARD_DEF[c.type].label.split(" ")[0]).join(", ")+'</div></div>';
+  h += '</div>';
+
+  if(p.status === "field"){
+    const bench = benchByWait(m);
+    h += '<div class="sec">Vervangen door</div><div class="card">';
+    if(!bench.length) h += '<div class="row"><div class="s">Niemand beschikbaar op de bank.</div></div>';
+    bench.forEach(b=>{
+      const BL = liveOf(b,T);
+      h += '<button class="opt" onclick="sub(\''+esc(p.n)+'\',\''+esc(b.n)+'\');closeModal()"><span class="badge b num">'+esc(b.n)+'</span>'+
+        '<span style="flex:1"><span style="display:block">'+esc(dispName(b))+'</span><span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(BL.spell)+' op de bank</span></span>'+
+        '</button>';
+    });
+    h += '</div>';
+  } else if(p.status === "bench"){
+    h += '<div class="sec">Brengt wie naar de bank?</div><div class="card">';
+    onFieldNow(m).forEach(f=>{
+      const FL = liveOf(f,T);
+      h += '<button class="opt" onclick="sub(\''+esc(f.n)+'\',\''+esc(p.n)+'\');closeModal()"><span class="badge f num">'+esc(f.n)+'</span>'+
+        '<span style="flex:1"><span style="display:block">'+esc(dispName(f))+'</span><span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(FL.field)+' gespeeld</span></span></button>';
+    });
+    h += '</div>';
+  } else if(p.status === "susp"){
+    h += '<div class="sec">Straf — nog '+mmss(Math.max(0,p.susp.until-T))+'</div><div class="card">'+
+      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',true)"><span style="flex:1">Straf beëindigen, terug het veld in</span></button>'+
+      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',false)"><span style="flex:1">Straf beëindigen, naar de bank</span></button></div>';
+  } else {
+    h += '<div class="sec">Rode kaart</div><div class="card"><div class="row"><div class="s">Deze speler doet niet meer mee.</div></div></div>';
+  }
+
+  if(p.status !== "out"){
+    h += '<div class="sec">Kaart geven</div><div class="card">';
+    ["groen","geel","rood"].forEach(t=>{
+      const d = CARD_DEF[t];
+      h += '<button class="opt" onclick="giveCard(\''+esc(p.n)+'\',\''+t+'\')"><span class="dot '+t+'"></span><span style="flex:1">'+d.label+'</span>'+
+        '<span style="color:var(--text2);font-size:14px">'+(d.ms?(d.ms/60000)+" min":"rest van de wedstrijd")+'</span></button>';
+    });
+    h += '</div>';
+  }
+  h += '<div style="height:10px"></div>';
+  openModal(p.n + (fullName(p) ? " · " + dispName(p) : ""), h);
+}
+function nameSheet(n){
+  const m = match(), p = m.players[n];
+  openModal("Naam van nummer " + p.n,
+    '<div class="card"><div class="row"><label class="lbl" for="nf">Voornaam</label><input type="text" id="nf" value="'+esc(p.f)+'" placeholder="Anneliese" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="nl">Achternaam</label><input type="text" id="nl" value="'+esc(p.l)+'" placeholder="optioneel" autocomplete="off"></div></div>'+
+    '<p class="muted">Op de spelerkaart staat enkel de voornaam.</p>'+
+    '<div class="pad"><button class="btn" id="nGo">Bewaren</button></div>',
+    { onMount(mo){
+        const f = mo.querySelector("#nf"), l = mo.querySelector("#nl");
+        const fire = ()=> setName(n, f.value, l.value);
+        mo.querySelector("#nGo").onclick = fire;
+        [f,l].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); }));
+        setTimeout(()=>{ try{ f.focus(); }catch(e){} }, 220);
+      }});
+}
+
+/* ---------- wisselen in twee stappen ---------- */
+let subOff = null;
+function subSheet(){ subOff = null; drawSubSheet(); }
+function drawSubSheet(){
+  const m = match(), T = elapsedTotal(m);
+  if(!subOff){
+    const field = onFieldNow(m);
+    if(!benchByWait(m).length){ toast("Niemand op de bank"); return; }
+    let h = '<p class="muted">Stap 1 van 2 — wie gaat van het veld?</p><div class="card">';
+    field.forEach(f=>{
+      const L = liveOf(f,T);
+      h += '<button class="opt" onclick="pickOff(\''+esc(f.n)+'\')"><span class="badge f num">'+esc(f.n)+'</span>'+
+        '<span style="flex:1"><span style="display:block">'+esc(dispName(f))+'</span>'+
+        '<span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(L.field)+' gespeeld · '+f.subs+' wissels</span></span>'+
+        '<span class="chev">'+svg.chev+'</span></button>';
+    });
+    h += '</div><div style="height:12px"></div>';
+    openModal("Wissel", h);
+  }else{
+    const p = m.players[subOff];
+    const bench = benchByWait(m);
+    let h = '<p class="muted">Stap 2 van 2 — wie komt erin voor '+esc(p.n)+' '+esc(dispName(p))+'?</p><div class="card">';
+    bench.forEach(b=>{
+      const L = liveOf(b,T);
+      h += '<button class="opt" onclick="doSub(\''+esc(b.n)+'\')"><span class="badge b num">'+esc(b.n)+'</span>'+
+        '<span style="flex:1"><span style="display:block">'+esc(dispName(b))+'</span>'+
+        '<span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(L.spell)+' op de bank · totaal '+mmss(L.bench)+'</span></span>'+
+        '</button>';
+    });
+    h += '</div><div class="pad"><button class="btn ghost" onclick="subSheet()">Terug</button></div>';
+    openModal("Wissel", h);
+  }
+}
+function pickOff(n){ subOff = n; drawSubSheet(); }
+function doSub(inN){ const off = subOff; subOff = null; closeModal(); sub(off, inN); }
+
+function cardSheet(){
+  const m = match();
+  const cands = playersArr(m).filter(p=>p.status==="field" || p.status==="bench");
+  let h = '<p class="muted">Kies de speler, daarna de kaart.</p><div class="card">';
+  cands.forEach(p=>{
+    h += '<button class="opt" onclick="playerSheet(\''+esc(p.n)+'\')"><span class="badge '+(p.status==="field"?"f":"b")+' num">'+esc(p.n)+'</span>'+
+      '<span style="flex:1">'+esc(dispName(p))+'</span><span style="font-size:13px;color:var(--text2)">'+(p.status==="field"?"veld":"bank")+'</span></button>';
+  });
+  h += '</div><div style="height:12px"></div>';
+  openModal("Kaart geven", h);
+}
+function goalSheet(side){
+  const m = match(), se = season(), ours = side === "us";
+  let h = "";
+  if(ours){
+    h += '<div class="sec">Wie scoorde?</div><div class="card">';
+    onFieldNow(m).forEach(p=>{
+      h += '<button class="opt" onclick="goal(\'us\',\''+esc(p.n)+'\')"><span class="badge f num">'+esc(p.n)+'</span>'+
+        '<span style="flex:1">'+esc(dispName(p))+'</span>'+(p.goals?'<span class="num" style="color:var(--cg);font-weight:700">'+p.goals+'</span>':'')+'</button>';
+    });
+    h += '<button class="opt" onclick="goal(\'us\')"><span class="badge">?</span><span style="flex:1">Zonder speler noteren</span></button></div>';
+  }else{
+    h += '<div class="pad"><button class="btn" onclick="goal(\'them\')">Tegendoelpunt noteren</button></div>';
+  }
+  h += '<div class="pad" style="padding-top:4px"><button class="btn ghost" onclick="unGoal(\''+side+'\')">Eén doelpunt terugnemen</button></div>';
+  openModal(ours ? "Doelpunt " + usName(se) : "Doelpunt tegenstander", h);
+}
+function moreSheet(){
+  const m = match(), part = ordinalPart(m.clock.part, m.cfg.parts).toLowerCase();
+  let h = '<div class="sec">Selectie</div><div class="card">';
+  h += '<button class="opt" onclick="addPlayerSheet()"><span style="flex:1">Speler toevoegen</span>'+
+       '<span style="color:var(--text2);font-size:14px">komt op de bank</span></button>';
+  h += '<button class="opt" onclick="removePlayerSheet()"><span style="flex:1">Speler verwijderen</span></button></div>';
+  h += '<div class="sec">Klok bijstellen</div><div class="card">';
+  h += '<button class="opt" onclick="nudgeClock(60000);closeModal()"><span style="flex:1">Eén minuut bijtellen</span><span style="color:var(--text2);font-size:14px">te laat gestart</span></button>';
+  h += '<button class="opt" onclick="nudgeClock(-60000);closeModal()"><span style="flex:1">Eén minuut aftrekken</span><span style="color:var(--text2);font-size:14px">te vroeg gestart</span></button>';
+  h += '<button class="opt" onclick="nudgeClock(10000);closeModal()"><span style="flex:1">Tien seconden bijtellen</span></button>';
+  h += '<button class="opt" onclick="nudgeClock(-10000);closeModal()"><span style="flex:1">Tien seconden aftrekken</span></button></div>';
+  h += '<div class="sec">Wedstrijd</div><div class="card">';
+  if(m.clock.part < m.cfg.parts-1)
+    h += '<button class="opt" onclick="endPart()"><span style="flex:1">Einde '+part+'</span><span style="color:var(--text2);font-size:14px">volgende deel klaarzetten</span></button>';
+  h += '<button class="opt" onclick="confirmFinish()"><span style="flex:1;color:var(--danger)">Wedstrijd beëindigen</span></button></div>';
+  const last = m.log.slice(-6).reverse();
+  if(last.length){
+    h += '<div class="sec">Laatste gebeurtenissen</div><div class="card">';
+    last.forEach(l=> h += '<div class="logline"><span class="lt num">'+mmss(l.t)+'</span><span>'+esc(l.text)+'</span></div>');
+    h += '</div>';
+  }
+  h += '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div>';
+  openModal("Meer", h);
+}
+function addPlayerSheet(){
+  const m = match(), se = season();
+  const known = Object.keys(se.roster).filter(n=> !m.players[n]).sort((a,b)=> (+a)-(+b));
+  let h = "";
+  if(known.length){
+    h += '<div class="sec">Uit het spelersbestand</div><div class="card">';
+    known.forEach(n=>{
+      const r = se.roster[n] || {};
+      h += '<button class="opt" onclick="addLatePlayer(\''+esc(n)+'\')"><span class="badge b num">'+esc(n)+'</span>'+
+           '<span style="flex:1">'+esc(((r.f||"")+" "+(r.l||"")).trim() || "geen naam")+'</span></button>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="sec">Nieuw nummer</div><div class="card">'+
+    '<div class="row"><label class="lbl" for="apN">Rugnummer</label><input type="tel" inputmode="numeric" id="apN" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="apF">Voornaam</label><input type="text" id="apF" placeholder="optioneel" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="apL">Achternaam</label><input type="text" id="apL" placeholder="optioneel" autocomplete="off"></div></div>'+
+    '<p class="muted">De speler komt op de bank. De banktijd telt vanaf nu, niet vanaf de aftrap.</p>'+
+    '<div class="pad"><button class="btn" id="apGo">Toevoegen</button></div>';
+  openModal("Speler toevoegen", h, { onMount(mo){
+    const nEl = mo.querySelector("#apN"), fEl = mo.querySelector("#apF"), lEl = mo.querySelector("#apL");
+    const fire = ()=>{
+      const n = nEl.value.trim();
+      if(!n){ nEl.focus(); toast("Geef een rugnummer"); return; }
+      addLatePlayer(n, fEl.value, lEl.value);
+    };
+    mo.querySelector("#apGo").onclick = fire;
+    [nEl,fEl,lEl].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); }));
+    nEl.addEventListener("input", ()=>{
+      const r = se.roster[nEl.value.trim()];
+      if(r){ if(!fEl.value) fEl.value = r.f||""; if(!lEl.value) lEl.value = r.l||""; }
+    });
+  }});
+}
+function removePlayerSheet(){
+  const m = match(), T = elapsedTotal(m);
+  const where = { field:"op het veld", bench:"op de bank", susp:"straftijd", out:"uit de wedstrijd" };
+  let h = '<p class="muted">Kies wie uit deze wedstrijd moet. In het spelersbestand van het seizoen blijft de speler gewoon staan.</p><div class="card">';
+  playersArr(m).forEach(p=>{
+    const L = liveOf(p,T);
+    h += '<button class="opt" onclick="confirmRemove(\''+esc(p.n)+'\')"><span class="badge '+(p.status==="field"?"f":"b")+' num">'+esc(p.n)+'</span>'+
+         '<span style="flex:1"><span style="display:block">'+esc(dispName(p))+'</span>'+
+         '<span style="display:block;font-size:13px;color:var(--text2)" class="num">'+where[p.status]+' · '+mmss(L.field)+' gespeeld</span></span></button>';
+  });
+  h += '</div><div style="height:12px"></div>';
+  openModal("Speler verwijderen", h);
+}
+function confirmRemove(n){
+  const m = match(), p = m.players[n]; if(!p) return;
+  const L = liveOf(p, elapsedTotal(m));
+  const hasData = L.field >= 1000 || p.subs > 0 || p.goals > 0 || p.cards.length > 0;
+  let txt = esc(p.n + " " + dispName(p)) + ' verdwijnt uit deze wedstrijd.';
+  if(hasData) txt += ' Ook de tijden, wissels'+(p.goals?', doelpunten':'')+(p.cards.length?' en kaarten':'')+' van deze speler in deze wedstrijd worden gewist. De stand blijft wel staan.';
+  if(p.status === "field") txt += ' Je staat daarna met één speler minder op het veld.';
+  openModal("Speler verwijderen",
+    '<p class="muted">'+txt+'</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="doRemove(\''+esc(n)+'\')">Verwijderen</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+}
+function doRemove(n){
+  const m = match(), p = m.players[n]; if(!p) return;
+  const label = p.n + " " + dispName(p);
+  delete m.players[n];
+  logEv(m, label + " verwijderd uit de selectie");
+  save(true); closeModal(); renderMatch();
+  toast(label + " verwijderd");
+}
+function addLatePlayer(n, f, l){
+  const m = match(), se = season();
+  n = String(n).trim(); if(!n) return;
+  if(m.players[n]){ toast("Nummer " + n + " speelt al mee"); return; }
+  const r = se.roster[n] || {};
+  f = String(f||"").trim() || r.f || "";
+  l = String(l||"").trim() || r.l || "";
+  const T = elapsedTotal(m);
+  m.players[n] = { n, f, l, status:"bench", fieldMs:0, benchMs:0, suspMs:0, subs:0,
+                   since:T, longestBench:0, cards:[], susp:null, ready:false, goals:0 };
+  se.roster[n] = { f, l };
+  logEv(m, n + " " + dispName(m.players[n]) + " toegevoegd aan de selectie");
+  save(true); closeModal(); renderMatch();
+  toast(n + " " + dispName(m.players[n]) + " staat op de bank");
+}
+function confirmFinish(){
+  const m = match();
+  openModal("Wedstrijd beëindigen",
+    '<p class="muted">De klok stopt en alle tijden worden vastgezet.</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="finishMatch()">Beëindigen op '+m.score.us+'–'+m.score.them+'</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Toch niet</button></div>');
+}
+
+/* ---------- overzicht ---------- */
+function renderSummary(){
+  const m = match(), se = season();
+  if(!m) return go("season");
+  nav(backBtn("season") + navTitle(usName(se) + " – " + (m.opponent||"?"), dateNL(m.date), "editMatchNames()") + '<div style="width:44px"></div>');
+  const T = m.totalMs != null ? m.totalMs : elapsedTotal(m), ps = playersArr(m);
+  let h = '<div class="pad" style="text-align:center;padding-bottom:6px">'+
+    '<div class="num" style="font-size:44px;font-weight:700;letter-spacing:-.03em">'+m.score.us+'–'+m.score.them+'</div>'+
+    '<div style="color:var(--text2);font-size:14px">'+(m.venue==="home"?"thuis":"uit")+' · '+hmm(T)+' effectieve speeltijd</div></div>';
+  h += '<div class="sec">Per speler</div><div class="card"><table class="st"><thead><tr><th>Speler</th><th>Veld</th><th>Bank</th><th>W</th><th>D</th></tr></thead><tbody>';
+  ps.forEach(p=>{
+    const L = liveOf(p,T);
+    h += '<tr><td><b class="num">'+esc(p.n)+'</b> '+esc(dispName(p))+'</td>'+
+      '<td class="num" style="color:var(--tint);font-weight:600">'+mmss(L.field)+'</td>'+
+      '<td class="num" style="color:var(--bench)">'+mmss(L.bench)+'</td>'+
+      '<td class="num">'+p.subs+'</td><td class="num">'+(p.goals||"")+'</td></tr>';
+  });
+  h += '</tbody></table></div><p class="muted">W = wissels, D = doelpunten.</p>';
+  const lb = ps.map(p=>({ n:p.n, v:Math.max(p.longestBench, p.status==="bench"?liveOf(p,T).spell:0) })).sort((a,b)=>b.v-a.v)[0];
+  if(lb && lb.v) h += '<p class="muted">Langste ononderbroken bankbeurt: '+esc(lb.n)+' met '+mmss(lb.v)+'.</p>';
+  h += '<div class="sec">Wedstrijdverloop</div><div class="card">';
+  if(!m.log.length) h += '<div class="row"><div class="s">Niets gelogd.</div></div>';
+  const manyBy = new Set(m.log.map(l=> l.by).filter(Boolean)).size > 1;
+  m.log.forEach(l=> h += '<div class="logline"><span class="lt num">'+mmss(l.t)+'</span><span>'+esc(l.text)+'</span>'+
+    (manyBy && l.by ? '<span class="by">'+esc(l.by)+'</span>' : '')+'</div>');
+  h += '</div>';
+  if(m.status === "live") h += '<div class="pad"><button class="btn" onclick="go(\'match\')">Terug naar de wedstrijd</button></div>';
+  h += '<div class="pad"><button class="btn ghost" onclick="shareMatch()">Overzicht delen</button></div>';
+  h += '<div class="pad" style="padding-top:0"><button class="btn ghost" style="color:var(--danger)" onclick="askDelMatch(\''+m.id+'\')">Wedstrijd verwijderen</button></div>';
+  $("#view").innerHTML = h;
+}
+function matchText(){
+  const m = match(), se = season(), T = m.totalMs != null ? m.totalMs : elapsedTotal(m);
+  let t = teamLabel(se) + " – " + (m.opponent||"?") + "  " + m.score.us + "–" + m.score.them + "\n" + dateNL(m.date) + "\n\n";
+  playersArr(m).forEach(p=>{ const L = liveOf(p,T);
+    t += p.n + " " + dispName(p) + " — veld " + mmss(L.field) + ", bank " + mmss(L.bench) + ", " + p.subs + " wissels" + (p.goals?", "+p.goals+" doelpunt"+(p.goals>1?"en":""):"") + "\n"; });
+  return t;
+}
+async function shareMatch(){
+  const txt = matchText();
+  try{
+    if(navigator.share){ await navigator.share({ title:"Wedstrijdoverzicht", text:txt }); return; }
+    await navigator.clipboard.writeText(txt); toast("Gekopieerd");
+  }catch(e){
+    openModal("Overzicht", '<div class="pad"><textarea class="ta" readonly>'+esc(txt)+'</textarea></div>');
+  }
+}
+
+/* ---------- seizoenstotalen ---------- */
+function renderSeasonStats(){
+  const se = season(); if(!se) return go("home");
+  nav(backBtn("season") + navTitle("Seizoenstotalen", teamLabel(se) + " · " + se.name) + '<div style="width:44px"></div>');
+  const agg = {};
+  se.matches.forEach(m=>{
+    const T = m.totalMs != null ? m.totalMs : elapsedTotal(m);
+    playersArr(m).forEach(p=>{
+      const L = liveOf(p,T);
+      const a = agg[p.n] || (agg[p.n] = { n:p.n, f:p.f || (se.roster[p.n]||{}).f || "", app:0, field:0, bench:0, subs:0, goals:0 });
+      if(p.f) a.f = p.f;
+      a.app++; a.field += L.field; a.bench += L.bench; a.subs += p.subs; a.goals += (p.goals||0);
+    });
+  });
+  const rows = Object.values(agg).sort((a,b)=>(+a.n)-(+b.n));
+  let h = '<p class="muted">Over '+se.matches.length+' wedstrijd'+(se.matches.length===1?"":"en")+'. Lopende wedstrijden tellen mee met hun stand van nu.</p>';
+  if(!rows.length) h += '<div class="empty">Nog geen gegevens.</div>';
+  else{
+    h += '<div class="card"><table class="st"><thead><tr><th>Speler</th><th>W</th><th>Veld</th><th>Bank</th><th>D</th></tr></thead><tbody>';
+    rows.forEach(a=> h += '<tr><td><b class="num">'+esc(a.n)+'</b> '+esc(a.f)+'</td><td class="num">'+a.app+'</td>'+
+      '<td class="num" style="color:var(--tint);font-weight:600">'+hmm(a.field)+'</td>'+
+      '<td class="num" style="color:var(--bench)">'+hmm(a.bench)+'</td><td class="num">'+(a.goals||"")+'</td></tr>');
+    h += '</tbody></table></div><p class="muted">W = wedstrijden, D = doelpunten.</p>';
+  }
+  $("#view").innerHTML = h;
+}
+
+/* ---------- spelersbestand ---------- */
+function editRoster(){
+  const se = season(), ns = Object.keys(se.roster).sort((a,b)=>a-b);
+  let h = '<p class="muted">Deze namen verschijnen automatisch als je een nieuwe wedstrijd aanmaakt.</p><div class="card">';
+  if(!ns.length) h += '<div class="row"><div class="s">Nog leeg. Nummers en namen komen hier vanzelf in.</div></div>';
+  ns.forEach(n=>{
+    const r = se.roster[n] || {};
+    h += '<div class="row"><span class="num" style="flex:0 0 34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--fill);font-weight:700">'+esc(n)+'</span>'+
+      '<input type="text" value="'+esc(r.f||"")+'" placeholder="voornaam" style="text-align:left" onchange="setRoster(\''+esc(n)+'\',\'f\',this.value)">'+
+      '<input type="text" value="'+esc(r.l||"")+'" placeholder="achternaam" style="text-align:left;color:var(--text2)" onchange="setRoster(\''+esc(n)+'\',\'l\',this.value)">'+
+      '<button onclick="delRoster(\''+esc(n)+'\')" style="color:var(--danger);font-size:14px;padding:8px">Wis</button></div>';
+  });
+  h += '</div><div style="height:14px"></div>';
+  openModal("Spelersbestand", h);
+}
+function setRoster(n, k, v){ const se = season(); se.roster[n] = Object.assign({f:"",l:""}, se.roster[n]); se.roster[n][k] = v.trim(); save(true); }
+function delRoster(n){ const se = season(); delete se.roster[n]; save(true); editRoster(); }
+
+/* ---------- back-up en overnemen ---------- */
+function backupSheet(){
+  openModal("Back-up",
+    '<p class="muted">Alles staat al in de cloud. Een back-up is een extra kopie als bestand, voor wie zeker wil zijn.</p>'+
+    '<div class="card"><button class="opt" onclick="exportBackup()"><span style="flex:1">Bestand opslaan</span></button>'+
+    '<button class="opt" onclick="copyBackup()"><span style="flex:1">Tekst kopiëren</span></button>'+
+    '<button class="opt" onclick="importBackup()"><span style="flex:1">Back-up terugzetten</span></button></div>'+
+    '<div class="ver">'+(S.lastBackup ? "Laatste back-up op dit toestel: " + dateNL(S.lastBackup) : "Op dit toestel nog geen back-up gemaakt")+'</div>');
+}
+function backupData(){
+  return JSON.stringify({ app:"hockey-bench-manager", appVersion:APP_VERSION, v:DATA_VERSION, exported:new Date().toISOString(),
+    seasons: S.seasons.map(se=> Object.assign(plain(teamContent(se)), { name:se.name, matches:plain(se.matches) })) });
+}
+function backupBlobName(){ return "hockey-bench-manager-" + new Date().toISOString().slice(0,10) + ".json"; }
+function markBackup(){ S.lastBackup = new Date().toISOString().slice(0,10); uiSave(); }
+function exportBackup(){
+  const data = backupData();
+  try{
+    const blob = new Blob([data], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = backupBlobName();
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    markBackup(); closeModal(); toast("Back-up opgeslagen");
+  }catch(e){ copyBackup(); }
+}
+async function copyBackup(){
+  const data = backupData();
+  try{
+    await navigator.clipboard.writeText(data);
+    markBackup(); closeModal(); toast("Back-up gekopieerd — plak ze in een notitie of mail");
+  }catch(e){
+    openModal("Back-up kopiëren", '<p class="muted">Selecteer alles en kopieer.</p><div class="pad"><textarea class="ta" readonly>'+esc(data)+'</textarea></div>');
+  }
+}
+function importBackup(){
+  openModal("Back-up terugzetten",
+    '<p class="muted">Werkt met een back-up uit Bankwacht en uit deze app. De teams worden toegevoegd aan wat er al staat; je kan ze eerst nog nakijken.</p>'+
+    '<div class="pad"><input type="file" id="bfile" accept=".json,application/json" style="margin-bottom:12px">'+
+    '<textarea id="btext" class="ta" style="height:140px" placeholder="of plak hier"></textarea></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn" id="bgo">Verder</button></div>',
+    { onMount(mo){
+        mo.querySelector("#bfile").onchange = e=>{
+          const f = e.target.files[0]; if(!f) return;
+          const r = new FileReader(); r.onload = ()=>{ mo.querySelector("#btext").value = r.result; }; r.readAsText(f);
+        };
+        mo.querySelector("#bgo").onclick = ()=>{
+          let p = null;
+          try{ p = JSON.parse(mo.querySelector("#btext").value); }catch(err){}
+          if(!p || !Array.isArray(p.seasons)){ toast("Dit bestand kon ik niet lezen"); return; }
+          startImport(p);
+        };
+      }});
+}
+function findOldData(){
+  try{
+    const raw = localStorage.getItem(OLD_KEY); if(!raw) return null;
+    const p = JSON.parse(raw);
+    return (p && Array.isArray(p.seasons) && p.seasons.length) ? p : null;
+  }catch(e){ return null; }
+}
+let IMP = null;
+function startImport(obj){
+  if(!obj){ toast("Geen gegevens gevonden"); return; }
+  let d;
+  try{ d = migrateData(plain(obj)); }catch(e){ toast("Deze gegevens kon ik niet lezen"); return; }
+  d.seasons = d.seasons.filter(se=> se && se.id);
+  if(!d.seasons.length){ toast("Geen teams of seizoenen gevonden in deze gegevens"); return; }
+  IMP = d;
+  const clash = d.seasons.some(se=> S.seasons.some(x=> x.id === se.id));
+  const club0 = (d.seasons.find(x=> (x.club||"").trim()) || {}).club || "";
+  let h = '<p class="muted">Kijk de namen na. In de nieuwe app bestaat een team uit een club, een teamnaam en een seizoen.</p>';
+  h += '<div class="card"><div class="row"><label class="lbl" for="iClub">Club</label><input type="text" id="iClub" value="'+esc(club0)+'" placeholder="bv. KHC Dragons" autocomplete="off"></div></div>';
+  h += '<p class="muted">Staat de clubnaam ook vooraan in een teamnaam, dan haalt de app die daar weg.</p>';
+  d.seasons.forEach((se,i)=>{
+    const nm = (se.matches||[]).length;
+    h += '<div class="sec">'+esc(se.team || "Team")+' · '+nm+' wedstrijd'+(nm===1?"":"en")+'</div><div class="card">'+
+      '<div class="row"><label class="lbl" for="iT'+i+'">Team</label><input type="text" id="iT'+i+'" value="'+esc(se.team||"")+'" autocomplete="off"></div>'+
+      '<div class="row"><label class="lbl" for="iS'+i+'">Seizoen</label><input type="text" id="iS'+i+'" value="'+esc(se.name||seasonLabel(seasonStartYear()))+'" autocomplete="off"></div></div>';
+  });
+  if(clash) h += '<p class="muted" style="margin-top:14px"><b>Let op:</b> minstens één team staat al in de app. Dat team wordt vervangen door de versie uit deze gegevens, ook de wedstrijden.</p>';
+  h += '<div class="pad"><button class="btn" id="iGo">'+d.seasons.length+' team'+(d.seasons.length===1?"":"s")+' overnemen</button></div>';
+  openModal("Gegevens overnemen", h, { onMount(mo){ mo.querySelector("#iGo").onclick = ()=> doImport(mo); } });
+}
+function stripClub(team, club){
+  const t = String(team||"").trim(), c = String(club||"").trim();
+  if(c && t.toLowerCase().indexOf(c.toLowerCase()) === 0){
+    const rest = t.slice(c.length).replace(/^[\s\-–—:·,]+/, "").trim();
+    if(rest) return rest;
+  }
+  return t;
+}
+function doImport(mo){
+  const d = IMP; if(!d) return;
+  const club = mo.querySelector("#iClub").value.trim();
+  let first = null;
+  d.seasons.forEach((se,i)=>{
+    const team = stripClub(mo.querySelector("#iT"+i).value, club) || "Team";
+    const nm = mo.querySelector("#iS"+i).value.trim() || seasonLabel(seasonStartYear());
+    const t = { id:se.id, club: club || se.club || "", team, name:nm, created:se.created || Date.now(),
+      roster:se.roster || {}, matches:(se.matches||[]).filter(m=> m && m.id),
+      members:[USER.uid], admins:[USER.uid], createdBy:USER.uid };
+    S.seasons = S.seasons.filter(x=> x.id !== t.id);
+    S.seasons.push(t);
+    if(!first) first = t;
+  });
+  S.seasons.sort((a,b)=> (b.created||0) - (a.created||0));
+  IMP = null;
+  S.activeSeason = first.id; S.openMatch = null;
+  save(true); closeModal(); go("season");
+  toast(d.seasons.length + " team" + (d.seasons.length===1?"":"s") + " overgenomen");
+}
+
+/* ---------- lus en scherm ---------- */
+setInterval(()=>{ if(VIEW === "match") paint(); }, 500);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) paint(); });
+window.addEventListener("pageshow", ()=> paint());
+
+let wakeLock = null;
+async function keepAwake(){
+  try{
+    const m = match();
+    if(VIEW === "match" && m && m.clock.running && "wakeLock" in navigator){
+      if(!wakeLock) wakeLock = await navigator.wakeLock.request("screen");
+    }else if(wakeLock){ await wakeLock.release(); wakeLock = null; }
+  }catch(e){ wakeLock = null; }
+}
+setInterval(keepAwake, 4000);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden){ wakeLock = null; keepAwake(); } });
+
+/* offline draaien, en zelf nagaan of er een nieuwe versie klaarstaat */
+let swReg = null, updateReady = false, reloading = false, checking = false;
+
+function showUpdateBar(){
+  if(document.getElementById("updbar")) return;
+  const bar = document.createElement("div");
+  bar.className = "updbar"; bar.id = "updbar";
+  bar.innerHTML = '<span>Nieuwe versie klaar</span>' +
+    '<button id="updGo">Vernieuwen</button>' +
+    '<button class="x" id="updX" aria-label="Later">Later</button>';
+  const app = document.getElementById("app");
+  app.insertBefore(bar, app.children[1]);
+  document.getElementById("updGo").onclick = applyUpdate;
+  document.getElementById("updX").onclick = ()=> bar.remove();
+}
+function applyUpdate(){
+  save(true);
+  if(swReg && swReg.waiting){
+    swReg.waiting.postMessage({ type:"SKIP_WAITING" });
+    setTimeout(()=>{ if(!reloading){ reloading = true; location.reload(); } }, 1200);
+  }else{
+    reloading = true; location.reload();
+  }
+}
+function watchWorker(w){
+  if(!w) return;
+  w.addEventListener("statechange", ()=>{
+    if(w.state === "installed" && navigator.serviceWorker.controller){
+      updateReady = true; showUpdateBar();
+    }
+  });
+}
+async function checkForUpdate(manual){
+  if(!swReg){ if(manual) toast("Updates werken pas als de app vanaf de website draait"); return; }
+  if(checking) return;
+  checking = true;
+  try{
+    await swReg.update();
+    setTimeout(()=>{
+      checking = false;
+      if(manual && !updateReady && !swReg.waiting) toast("Je gebruikt de nieuwste versie");
+      if(swReg.waiting){ updateReady = true; showUpdateBar(); }
+    }, 1400);
+  }catch(e){
+    checking = false;
+    if(manual) toast("Kon niet controleren — geen verbinding?");
+  }
+}
+if("serviceWorker" in navigator && location.protocol === "https:" && !/claude\.ai$/.test(location.hostname)){
+  window.addEventListener("load", async ()=>{
+    try{
+      swReg = await navigator.serviceWorker.register("sw.js");
+      if(swReg.waiting && navigator.serviceWorker.controller){ updateReady = true; showUpdateBar(); }
+      watchWorker(swReg.installing);
+      swReg.addEventListener("updatefound", ()=> watchWorker(swReg.installing));
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+        if(!reloading){ reloading = true; location.reload(); }
+      });
+      checkForUpdate(false);
+    }catch(e){ swReg = null; }
+  });
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) checkForUpdate(false); });
+  window.addEventListener("focus", ()=> checkForUpdate(false));
+}
+
+/* ---------- aanmelden, laden en profiel ---------- */
+let bootT = null, loginBusy = false, loginHintT = null, loginErr = "", showAlt = false;
+
+function gateHead(){ return '<img src="apple-touch-icon-v5.png" alt="">'; }
+function renderBoot(){
+  nav('<div style="width:44px"></div>' + navTitle(APP_NAME) + '<div style="width:44px"></div>');
+  let h = '<div class="gate">' + gateHead() + '<h1>' + APP_NAME + '</h1>';
+  if(BOOT_ERR){
+    h += '<p class="err">' + esc(BOOT_ERR) + '</p>' +
+         '<button class="btn" onclick="location.reload()">Opnieuw proberen</button>' +
+         (USER ? '<button class="link" onclick="doSignOut(true)">Afmelden</button>' : '');
+  }else{
+    h += '<p id="bootmsg">Gegevens laden…</p><div class="spin"></div>';
+  }
+  h += '</div>';
+  $("#view").innerHTML = h;
+  clearTimeout(bootT);
+  if(!BOOT_ERR) bootT = setTimeout(()=>{
+    const el = document.getElementById("bootmsg");
+    if(el && VIEW === "boot") el.textContent = navigator.onLine
+      ? "Dit duurt langer dan normaal. Even geduld, of controleer je verbinding."
+      : "Geen internet. De eerste keer op dit toestel is verbinding nodig.";
+  }, 9000);
+}
+function bootError(e){
+  console.warn(e);
+  const code = e && e.code || "";
+  BOOT_ERR = code === "permission-denied"
+    ? "De databank weigert de toegang. Staan de regels uit firestore.rules in Firebase?"
+    : "De gegevens konden niet geladen worden (" + (code || "onbekende fout") + ").";
+  if(!READY){ VIEW = "boot"; render(); } else toast(BOOT_ERR, 5000);
+}
+function renderLogin(){
+  nav('<div style="width:44px"></div>' + navTitle(APP_NAME) + '<div style="width:44px"></div>');
+  let h = '<div class="gate">' + gateHead() + '<h1>' + APP_NAME + '</h1>' +
+    '<p>Speeltijd en banktijd bijhouden tijdens een hockeywedstrijd.</p>' +
+    '<p>Meld je aan, dan staan je teams en wedstrijden op elk toestel waar je aanmeldt.</p>';
+  if(!window.FB){
+    h += '<div class="spin"></div>';
+  }else{
+    h += '<button class="btn" id="gBtn" onclick="doLogin()" ' + (loginBusy ? "disabled" : "") + '>' +
+         (loginBusy ? "Bezig met aanmelden…" : "Aanmelden met Google") + '</button>';
+    if(loginErr) h += '<p class="err">' + esc(loginErr) + '</p>';
+    if(showAlt) h += '<button class="link" onclick="doLogin(\'redirect\')">Blijft het hangen? Probeer de andere manier</button>';
+  }
+  h += '</div>';
+  $("#view").innerHTML = h;
+}
+function loginMessage(e){
+  const c = e && e.code || "";
+  if(c === "auth/unauthorized-domain") return "Dit webadres is niet toegelaten in Firebase (Authentication → Settings → Authorized domains).";
+  if(c === "auth/network-request-failed") return "Geen verbinding met Google. Controleer je internet en probeer opnieuw.";
+  if(c === "auth/operation-not-allowed") return "Aanmelden met Google staat nog niet aan in Firebase (Authentication → Sign-in method).";
+  if(c === "auth/account-exists-with-different-credential") return "Dit e-mailadres is al gekoppeld aan een andere manier van aanmelden.";
+  return "Aanmelden mislukt (" + (c || "onbekende fout") + ").";
+}
+async function doLogin(mode){
+  if(!window.FB || loginBusy) return;
+  loginBusy = true; loginErr = "";
+  renderLogin();
+  clearTimeout(loginHintT);
+  loginHintT = setTimeout(()=>{ if(loginBusy){ showAlt = true; loginBusy = false; if(VIEW === "login") renderLogin(); } }, 15000);
+  try{
+    await window.FB.signInGoogle(mode === "redirect" ? "redirect" : "popup");
+  }catch(e){
+    const c = e && e.code || "";
+    if(mode !== "redirect" && (c === "auth/popup-blocked" || c === "auth/operation-not-supported-in-this-environment")){
+      loginBusy = false; clearTimeout(loginHintT); return doLogin("redirect");
+    }
+    if(c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request" || c === "auth/user-cancelled"){ toast("Aanmelden geannuleerd"); }
+    else { loginErr = loginMessage(e); showAlt = true; }
+  }
+  loginBusy = false; clearTimeout(loginHintT);
+  if(VIEW === "login") renderLogin();
+}
+window.fbAuthError = e=>{
+  const c = e && e.code || "";
+  if(c === "auth/popup-closed-by-user" || c === "auth/user-cancelled") return;
+  loginErr = loginMessage(e); showAlt = true;
+  if(VIEW === "login") renderLogin();
+};
+window.fbAuthChanged = u=>{
+  if(!u){
+    stopSync(); USER = null; READY = false; PROFILE = undefined; BOOT_ERR = "";
+    VIEW = "login"; closeModal(true); render(); return;
+  }
+  if(USER && USER.uid === u.uid) return;
+  stopSync(); USER = u; READY = false; PROFILE = undefined; BOOT_ERR = "";
+  VIEW = "boot"; closeModal(true); render();
+  startSync();
+};
+window.fbReady = ()=>{ if(VIEW === "login") renderLogin(); };
+
+function doSignOut(force){
+  if(!force && SYNC.pending && !navigator.onLine){
+    openModal("Afmelden",
+      '<p class="muted">Er staan nog wijzigingen op dit toestel die niet in de cloud zitten, omdat er geen internet is. Meld je nu af, dan ben je die kwijt.</p>'+
+      '<div class="pad"><button class="btn" onclick="closeModal()">Wachten op internet</button></div>'+
+      '<div class="pad" style="padding-top:0"><button class="btn ghost" style="color:var(--danger)" onclick="doSignOut(true)">Toch afmelden</button></div>');
+    return;
+  }
+  closeModal(true);
+  try{ flush(); }catch(e){}
+  if(window.FB) window.FB.signOut().catch(e=> toast("Afmelden mislukt"));
+}
+
+/* profiel: voornaam en achternaam, voor het logboek en later voor het team */
+function splitName(full){
+  const t = String(full||"").trim().split(/\s+/).filter(Boolean);
+  return { first: t.shift() || "", last: t.join(" ") };
+}
+function renderProfile(){
+  const first = !READY;
+  const guess = PROFILE || splitName(USER && USER.displayName);
+  nav((first ? '<div style="width:44px"></div>' : backBtn(season() ? "season" : "home")) + navTitle(first ? "Welkom" : "Je profiel") + '<div style="width:44px"></div>');
+  let h = first ? '<p class="muted" style="margin-top:18px">Hoe heet je? Je naam komt in het logboek bij wat je doet, zodat later ook je teamgenoten zien wie wat noteerde.</p>'
+                : '<div style="height:18px"></div>';
+  h += '<div class="card"><div class="row"><label class="lbl" for="pF">Voornaam</label><input type="text" id="pF" value="'+esc(guess.first||"")+'" autocomplete="given-name"></div>'+
+       '<div class="row"><label class="lbl" for="pL">Achternaam</label><input type="text" id="pL" value="'+esc(guess.last||"")+'" autocomplete="family-name"></div>'+
+       '<div class="row"><div class="grow"><div class="t" style="font-size:15px;color:var(--text2)">Aangemeld als</div></div><div class="v" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc((USER && USER.email) || "")+'</div></div></div>';
+  h += '<div class="pad"><button class="btn" id="pGo">'+(first ? "Verder" : "Bewaren")+'</button></div>';
+  h += '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="doSignOut()">Afmelden</button></div>';
+  $("#view").innerHTML = h;
+  const f = $("#pF"), l = $("#pL");
+  const fire = ()=>{
+    const fv = f.value.trim(), lv = l.value.trim();
+    if(!fv){ f.focus(); toast("Geef je voornaam"); return; }
+    const wasReady = READY;
+    PROFILE = { first:fv, last:lv, email:(USER && USER.email) || "" };
+    const F = window.FB;
+    F.setDoc(F.doc(F.db, "users", USER.uid), Object.assign({}, PROFILE, { updatedAt:F.serverTimestamp() }), { merge:true })
+      .catch(e=> syncError(e));
+    if(!wasReady){ if(!READY){ VIEW = "boot"; render(); maybeRoute(); } }
+    else { toast("Profiel bewaard"); go(season() ? "season" : "home"); }
+  };
+  $("#pGo").onclick = fire;
+  [f,l].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); }));
+}
+
+/* ---------- start ---------- */
+VIEW = "boot";
+render();
+setTimeout(()=>{
+  if(!window.FB){
+    BOOT_ERR = navigator.onLine
+      ? "De app kon niet opstarten. Probeer opnieuw."
+      : "Geen internet. De eerste keer op dit toestel is verbinding nodig.";
+    if(VIEW === "boot") render();
+  }
+}, 15000);
+
+</script>
+<script type="module">
+/* Firebase: aanmelden en databank. Versie 12.19.0, rechtstreeks van Google geladen.
+   Deze gegevens zijn niet geheim; de toegang wordt geregeld door de regels in firestore.rules. */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache,
+  doc, collection, query, where, onSnapshot, writeBatch, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC4SresWsUvhdisY5USCrMQ9JjMcxN2EvA",
+  authDomain: "hockey-bench-manager.firebaseapp.com",
+  projectId: "hockey-bench-manager",
+  storageBucket: "hockey-bench-manager.firebasestorage.app",
+  messagingSenderId: "1052034751677",
+  appId: "1:1052034751677:web:4282794de62ab0f5506bd4"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+  popupRedirectResolver: browserPopupRedirectResolver
+});
+let db;
+try{
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }), ignoreUndefinedProperties: true });
+}catch(e){
+  console.warn("offline opslag niet beschikbaar, enkel geheugen", e);
+  db = initializeFirestore(app, { localCache: memoryLocalCache(), ignoreUndefinedProperties: true });
+}
+
+window.FB = {
+  db, doc, collection, query, where, onSnapshot, writeBatch, setDoc, serverTimestamp,
+  signInGoogle(mode){
+    const p = new GoogleAuthProvider();
+    p.setCustomParameters({ prompt: "select_account" });
+    return mode === "redirect" ? signInWithRedirect(auth, p) : signInWithPopup(auth, p);
+  },
+  signOut(){ return signOut(auth); }
+};
+getRedirectResult(auth).catch(e=>{ if(window.fbAuthError) window.fbAuthError(e); });
+onAuthStateChanged(auth, u=>{ if(window.fbAuthChanged) window.fbAuthChanged(u); });
+if(window.fbReady) window.fbReady();
+</script>
+</body>
+</html>

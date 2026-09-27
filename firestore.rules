@@ -1,0 +1,41 @@
+rules_version = '2';
+
+// Hockey Bench Manager 3.0 — databankregels
+// Plak dit in Firebase: Firestore Database -> tabblad Regels (Rules) -> Publiceren (Publish).
+//
+// Wat deze regels doen:
+//  - Je profiel kan enkel jij lezen en aanpassen.
+//  - Een team en zijn wedstrijden zijn enkel zichtbaar voor de leden van dat team.
+//  - Wie een team aanmaakt, is er het enige lid en beheerder van.
+//  - In 3.0 kan niemand leden toevoegen of verwijderen. Dat komt in 3.1 met de teamcodes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    match /users/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /teams/{teamId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+
+      allow create: if signedIn()
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.admins == [request.auth.uid];
+
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.members
+        && request.resource.data.members == resource.data.members
+        && request.resource.data.admins == resource.data.admins;
+
+      allow delete: if signedIn() && request.auth.uid in resource.data.members;
+
+      match /matches/{matchId} {
+        allow read, write: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members;
+      }
+    }
+  }
+}
