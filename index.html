@@ -247,14 +247,15 @@ table.st tr:last-child td{border-bottom:0}
    (vroeger Bankwacht)
    Gemaakt voor Anneliese van KHC Dragons
    =========================================================== */
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.1.0";
 const APP_NAME = "Hockey Bench Manager";
 const DATA_VERSION = 2;
 const OLD_KEY = "bankwacht.v1";          /* opslag van Bankwacht 2.x, enkel nog om over te nemen */
 
 /* In het geheugen heten teams nog 'seasons' (zoals in 2.x), zodat de rest van de app
    ongewijzigd kan blijven. Eén 'season' = één team in één seizoen:
-   { id, club, team, name (= seizoen, bv. "2026–2027"), roster, matches, members, admins, createdBy, created } */
+   { id, clubId, club (reservenaam), team, name (= seizoen, bv. "2026–2027"), roster, matches,
+     members, admins, people {uid:{f,l}}, invite {code,until}, createdBy, created } */
 let S = { v:DATA_VERSION, seasons:[], activeSeason:null, openMatch:null, lastBackup:null };
 let USER = null;          /* aangemelde gebruiker (Firebase) */
 let PROFILE;              /* undefined = nog onbekend, null = nog geen profiel, object = { first, last, email } */
@@ -312,8 +313,10 @@ document.addEventListener("visibilitychange", ()=>{ if(document.hidden) flush();
    Is de inhoud in de app anders, dan wordt ze geschreven. Komt er van de server iets nieuws
    binnen en heeft dit toestel geen onbewaarde wijziging aan dat document, dan wordt het overgenomen.
    Paden: "t/<teamId>" en "m/<teamId>/<matchId>". */
-const SYNC = { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubMatches:{}, loadedMatches:{},
-  gotTeams:false, pending:0, timer:null, errShown:false };
+const SYNC = { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubClubs:null, unsubMatches:{}, loadedMatches:{},
+  gotTeams:false, gotClubs:false, pending:0, timer:null, errShown:false };
+let CLUBS = {};              /* id -> { id, name, norm } */
+let JOIN_PENDING = null;     /* team waar je net lid van werd, openen zodra het binnen is */
 
 function stable(v){
   if(v === undefined || (typeof v === "number" && !isFinite(v))) return "null";
@@ -323,15 +326,23 @@ function stable(v){
 }
 const plain = o => JSON.parse(JSON.stringify(o));
 function teamContent(se){
-  return { id:se.id, club:se.club||"", team:se.team||"", season:se.name||"", roster:se.roster||{},
-    members:se.members||[], admins:se.admins||[], createdBy:se.createdBy||"", created:se.created||0 };
+  return { id:se.id, clubId:se.clubId||"", club:se.club||"", team:se.team||"", season:se.name||"", roster:se.roster||{},
+    members:se.members||[], admins:se.admins||[], people:se.people||{}, invite:se.invite||null,
+    createdBy:se.createdBy||"", created:se.created||0 };
 }
 function applyTeam(se, c){
-  se.club = c.club||""; se.team = c.team||""; se.name = c.season||""; se.roster = c.roster||{};
-  se.members = c.members||[]; se.admins = c.admins||[]; se.createdBy = c.createdBy||""; se.created = c.created||0;
+  se.clubId = c.clubId||""; se.club = c.club||""; se.team = c.team||""; se.name = c.season||""; se.roster = c.roster||{};
+  se.members = c.members||[]; se.admins = c.admins||[]; se.people = c.people||{}; se.invite = c.invite||null;
+  se.createdBy = c.createdBy||""; se.created = c.created||0;
   if(!Array.isArray(se.matches)) se.matches = [];
 }
-function stripMeta(d){ const o = Object.assign({}, d); delete o.updatedAt; delete o.updatedBy; return o; }
+/* openbaar teamoverzicht: enkel wat nodig is om een bestaand team te herkennen */
+function dirContent(se){
+  const ppl = se.people || {};
+  return { teamId:se.id, clubId:se.clubId||"", club:clubName(se), team:se.team||"", norm:normName(se.team),
+    season:se.name||"", admins:(se.admins||[]).map(u=> shortOf(ppl[u])).filter(Boolean) };
+}
+function stripMeta(d){ const o = Object.assign({}, d); delete o.updatedAt; delete o.updatedBy; delete o.joinCode; return o; }
 function tsOf(x){ try{ return x && x.toMillis ? x.toMillis() : 0; }catch(e){ return 0; } }
 
 function flush(){
@@ -343,6 +354,9 @@ function flush(){
     const tp = "t/" + se.id; present.add(tp);
     const tc = teamContent(se), tj = stable(tc);
     if(SYNC.lastSent[tp] !== tj){ teamSets.push(["set", F.doc(F.db, "teams", se.id), plain(tc)]); SYNC.lastSent[tp] = tj; }
+    const dp = "d/" + se.id; present.add(dp);
+    const dc = dirContent(se), dj = stable(dc);
+    if(SYNC.lastSent[dp] !== dj){ matchOps.push(["set", F.doc(F.db, "directory", se.id), plain(dc)]); SYNC.lastSent[dp] = dj; }
     (se.matches||[]).forEach(m=>{
       const mp = "m/" + se.id + "/" + m.id; present.add(mp);
       const mj = stable(m);
@@ -353,10 +367,12 @@ function flush(){
     if(present.has(p)) return;
     const q = p.split("/");
     if(q[0] === "m") matchOps.push(["del", F.doc(F.db, "teams", q[1], "matches", q[2])]);
+    else if(q[0] === "d") matchOps.push(["del", F.doc(F.db, "directory", q[1])]);
     else teamDels.push(["del", F.doc(F.db, "teams", q[1])]);
     delete SYNC.lastSent[p]; delete SYNC.seenTs[p];
   });
-  /* volgorde telt: eerst teams (anders mag een wedstrijd er nog niet in), dan wedstrijden, dan gewiste teams */
+  /* volgorde telt: eerst teams (anders mogen wedstrijden en het teamoverzicht er nog niet in),
+     dan wedstrijden en teamoverzicht, en pas als laatste gewiste teams */
   commitOps(teamSets); commitOps(matchOps); commitOps(teamDels);
 }
 function commitOps(ops){
@@ -370,6 +386,12 @@ function commitOps(ops){
     SYNC.pending++; paintSync();
     b.commit().catch(e=> syncError(e)).finally(()=>{ SYNC.pending--; paintSync(); });
   }
+}
+/* losse schrijfactie (clubs, codes, lid worden): geeft true of false terug */
+function trackCommit(b, quiet){
+  SYNC.pending++; paintSync();
+  return b.commit().then(()=> true, e=>{ console.warn(e); if(!quiet) syncError(e); return false; })
+    .finally(()=>{ SYNC.pending--; paintSync(); });
 }
 function syncError(e){
   console.warn("bewaren mislukt", e);
@@ -389,15 +411,24 @@ function startSync(){
     else return;
     maybeRoute();
   }, e=> bootError(e));
+  SYNC.unsubClubs = F.onSnapshot(F.collection(F.db, "clubs"), snap=>{
+    if(!USER || USER.uid !== uidNow) return;
+    const m = {};
+    snap.docs.forEach(d=>{ const x = d.data(); m[d.id] = { id:d.id, name:x.name||"", norm:x.norm||normClub(x.name) }; });
+    CLUBS = m; SYNC.gotClubs = true;
+    remoteChanged(); maybeRoute();
+  }, e=> bootError(e));
   const q = F.query(F.collection(F.db, "teams"), F.where("members", "array-contains", uidNow));
   SYNC.unsubTeams = F.onSnapshot(q, snap=>{ if(USER && USER.uid === uidNow) onTeamsSnap(snap); }, e=> bootError(e));
 }
 function stopSync(){
   try{ SYNC.unsubUser && SYNC.unsubUser(); }catch(e){}
   try{ SYNC.unsubTeams && SYNC.unsubTeams(); }catch(e){}
+  try{ SYNC.unsubClubs && SYNC.unsubClubs(); }catch(e){}
   Object.values(SYNC.unsubMatches).forEach(u=>{ try{ u(); }catch(e){} });
-  Object.assign(SYNC, { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubMatches:{}, loadedMatches:{},
-    gotTeams:false, errShown:false });
+  Object.assign(SYNC, { lastSent:{}, seenTs:{}, unsubTeams:null, unsubUser:null, unsubClubs:null, unsubMatches:{}, loadedMatches:{},
+    gotTeams:false, gotClubs:false, errShown:false });
+  CLUBS = {}; JOIN_PENDING = null;
   clearTimeout(SYNC.timer); SYNC.timer = null;
   S = { v:DATA_VERSION, seasons:[], activeSeason:null, openMatch:null, lastBackup:null };
 }
@@ -417,12 +448,20 @@ function onTeamsSnap(snap){
     else if(j !== SYNC.lastSent[p]){
       const localJ = stable(teamContent(se));
       if(SYNC.lastSent[p] === undefined || localJ === SYNC.lastSent[p]){ applyTeam(se, c); remoteChanged(); }
+      else{
+        /* eigen wijziging onderweg: ledenlijst komt altijd van de server, de rest van dit toestel */
+        se.members = c.members||[]; se.admins = c.admins||[]; se.people = c.people||{};
+        remoteChanged(); setTimeout(()=> save(), 0);
+      }
     }
     SYNC.lastSent[p] = j;
     ensureMatches(d.id);
   });
   S.seasons.slice().forEach(se=>{
-    if(!ids.has(se.id) && SYNC.lastSent["t/" + se.id] !== undefined) removeTeamLocal(se.id);
+    if(!ids.has(se.id) && SYNC.lastSent["t/" + se.id] !== undefined){
+      if(READY) toast(teamLabel(se) + " (" + se.name + ") is niet meer beschikbaar", 4000);
+      removeTeamLocal(se.id);
+    }
   });
   S.seasons.sort((a,b)=> (b.created||0) - (a.created||0));
   SYNC.gotTeams = true;
@@ -430,7 +469,7 @@ function onTeamsSnap(snap){
 }
 function removeTeamLocal(id){
   S.seasons = S.seasons.filter(x=> x.id !== id);
-  Object.keys(SYNC.lastSent).forEach(p=>{ if(p === "t/" + id || p.indexOf("m/" + id + "/") === 0){ delete SYNC.lastSent[p]; delete SYNC.seenTs[p]; } });
+  Object.keys(SYNC.lastSent).forEach(p=>{ if(p === "t/" + id || p === "d/" + id || p.indexOf("m/" + id + "/") === 0){ delete SYNC.lastSent[p]; delete SYNC.seenTs[p]; } });
   const u = SYNC.unsubMatches[id]; if(u){ try{ u(); }catch(e){} delete SYNC.unsubMatches[id]; }
   if(S.activeSeason === id){ S.activeSeason = S.seasons.length ? S.seasons[0].id : null; S.openMatch = null; uiSave(); }
   remoteChanged();
@@ -477,6 +516,10 @@ function onMatchesSnap(teamId, snap){
   se.matches.sort((a,b)=> (b.created||0) - (a.created||0));
   SYNC.loadedMatches[teamId] = true;
   maybeRoute();
+  if(READY && JOIN_PENDING === teamId){
+    JOIN_PENDING = null; S.activeSeason = teamId; S.openMatch = null; uiSave();
+    go("season"); toast("Welkom in " + teamLabel(se));
+  }
 }
 let rrT = null;
 function remoteChanged(){
@@ -490,7 +533,7 @@ function remoteChanged(){
 }
 function maybeRoute(){
   if(READY || !USER) return;
-  if(PROFILE === undefined || !SYNC.gotTeams) return;
+  if(PROFILE === undefined || !SYNC.gotTeams || !SYNC.gotClubs) return;
   if(PROFILE === null){ if(VIEW !== "profile"){ VIEW = "profile"; render(); } return; }
   const ui = uiLoad();
   S.activeSeason = ui.activeSeason || null; S.openMatch = ui.openMatch || null; S.lastBackup = ui.lastBackup || null;
@@ -502,6 +545,23 @@ function maybeRoute(){
   const cur = match();
   VIEW = (cur && cur.status === "live") ? "match" : (se ? "season" : "home");
   render();
+  migrateTeams();
+}
+/* teams uit 3.0: koppelen aan een club uit de clubdatabank, en je eigen naam bij de leden zetten */
+function migrateTeams(){
+  let ch = false;
+  S.seasons.forEach(se=>{
+    if(!se.clubId && (se.club||"").trim()){
+      const n = normClub(se.club);
+      const hit = Object.values(CLUBS).find(c=> c.norm === n);
+      se.clubId = hit ? hit.id : createClub(se.club.trim());
+      ch = true;
+    }
+    if(PROFILE && (!se.people || !se.people[USER.uid])){
+      se.people = Object.assign({}, se.people); se.people[USER.uid] = { f:PROFILE.first||"", l:PROFILE.last||"" }; ch = true;
+    }
+  });
+  if(ch) save(true);
 }
 function syncState(){
   if(!navigator.onLine) return SYNC.pending ? "wait" : "off";
@@ -523,11 +583,13 @@ function syncRow(){
 window.addEventListener("online", paintSync);
 window.addEventListener("offline", paintSync);
 
-function userShort(){
-  if(!PROFILE) return "";
-  const f = (PROFILE.first||"").trim(), l = (PROFILE.last||"").trim();
+function shortOf(p){
+  if(!p) return "";
+  const f = (p.f||p.first||"").trim(), l = (p.l||p.last||"").trim();
   return (f + (l ? " " + l.charAt(0).toUpperCase() + "." : "")).trim();
 }
+function fullOf(p){ return p ? (((p.f||"") + " " + (p.l||"")).trim()) : ""; }
+function userShort(){ return shortOf(PROFILE); }
 function userFull(){ return PROFILE ? ((PROFILE.first||"") + " " + (PROFILE.last||"")).trim() : ""; }
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
@@ -660,16 +722,73 @@ function match(){ const se = season(); if(!se) return null; return se.matches.fi
 function dispName(p){ return (p.f || "").trim() || ("speler " + p.n); }
 function fullName(p){ return ((p.f||"") + " " + (p.l||"")).trim(); }
 
-function newTeam(club, team, seasonLabel){
-  const s = { id:uid(), club, team, name:seasonLabel, created:Date.now(), roster:{}, matches:[],
-    members:[USER.uid], admins:[USER.uid], createdBy:USER.uid };
+function newTeam(clubId, clubText, team, seasonLabel){
+  const s = { id:uid(), clubId, club:clubText, team, name:seasonLabel, created:Date.now(), roster:{}, matches:[],
+    members:[USER.uid], admins:[USER.uid], people:{ [USER.uid]:{ f:(PROFILE&&PROFILE.first)||"", l:(PROFILE&&PROFILE.last)||"" } },
+    invite:null, createdBy:USER.uid };
   S.seasons.unshift(s); S.activeSeason = s.id; save(true); return s;
 }
+function clubName(se){ const c = se && se.clubId && CLUBS[se.clubId]; return (c && c.name) || (se && se.club) || ""; }
 /* "KHC Dragons – U12 D1" */
-function teamLabel(se){ return [se.club, se.team].map(x=> (x||"").trim()).filter(Boolean).join(" – ") || "Team"; }
+function teamLabel(se){ return [clubName(se), se.team].map(x=> (x||"").trim()).filter(Boolean).join(" – ") || "Team"; }
 /* korte naam op het scorebord en in de log: de club, anders de teamnaam */
-function usName(se){ return (se.club||"").trim() || (se.team||"").trim() || "Wij"; }
-/* seizoenen lopen van augustus tot mei; vanaf 1 juni telt het volgende seizoen */
+function usName(se){ return clubName(se).trim() || (se.team||"").trim() || "Wij"; }
+function isAdmin(se){ return !!(se && USER && (se.admins||[]).indexOf(USER.uid) >= 0); }
+
+/* ---------- clubdatabank ---------- */
+const CLUB_STOP = ["koninklijke","kon","royal","roy","r","k","hockeyclub","hockey","club","hc","khc","rhc","thc","mhc","ahc","vzw","asbl","de","het","the","le","la"];
+function normClub(t){
+  const w = String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\./g,"").replace(/[^a-z0-9]+/g," ").trim().split(" ").filter(Boolean);
+  const k = w.filter(x=> CLUB_STOP.indexOf(x) < 0);
+  return (k.length ? k : w).join("");
+}
+function lev(a, b){
+  if(a === b) return 0;
+  const m = a.length, n = b.length; if(!m) return n; if(!n) return m;
+  let prev = Array.from({length:n+1}, (_,j)=> j);
+  for(let i = 1; i <= m; i++){
+    const cur = [i];
+    for(let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+/* clubs die er hard op lijken: zelfde kern, kleine tikfout, of de ene naam zit in de andere */
+function similarClubs(name, exceptId){
+  const n = normClub(name); if(!n) return [];
+  return Object.values(CLUBS).filter(c=> c.id !== exceptId).map(c=>{
+    const cn = c.norm || normClub(c.name);
+    let d = lev(n, cn);
+    if(n.length >= 4 && cn.length >= 4 && (cn.indexOf(n) >= 0 || n.indexOf(cn) >= 0)) d = Math.min(d, 1);
+    return { c, d };
+  }).filter(x=> x.d <= (n.length <= 5 ? 1 : 2)).sort((a,b)=> a.d - b.d || a.c.name.localeCompare(b.c.name)).map(x=> x.c);
+}
+function clubSuggestions(typed){
+  const n = normClub(typed); if(n.length < 2) return [];
+  const pre = Object.values(CLUBS).filter(c=> (c.norm||"").indexOf(n) === 0 || normName(c.name).indexOf(normName(typed)) === 0);
+  const sim = similarClubs(typed);
+  const out = []; [...pre, ...sim].forEach(c=>{ if(out.indexOf(c) < 0) out.push(c); });
+  return out.slice(0, 4);
+}
+function createClub(name){
+  const F = window.FB, id = uid();
+  const c = { id, name, norm:normClub(name), createdBy:USER.uid, createdByName:userShort(), created:Date.now() };
+  CLUBS[id] = { id, name, norm:c.norm };
+  const b = F.writeBatch(F.db);
+  b.set(F.doc(F.db, "clubs", id), Object.assign({}, c, { updatedAt:F.serverTimestamp(), updatedBy:USER.uid }));
+  trackCommit(b);
+  return id;
+}
+function renameClub(clubId, viaTeam, name){
+  const F = window.FB, c = CLUBS[clubId]; if(!c) return;
+  const old = c.name;
+  c.name = name; c.norm = normClub(name);
+  const b = F.writeBatch(F.db);
+  b.update(F.doc(F.db, "clubs", clubId), { name, norm:c.norm, viaTeam, updatedAt:F.serverTimestamp(), updatedBy:USER.uid });
+  b.set(F.doc(F.db, "clubs", clubId, "history", uid()), { old, name, by:USER.uid, byName:userShort(), at:F.serverTimestamp() });
+  trackCommit(b).then(ok=>{ if(!ok){ c.name = old; c.norm = normClub(old); render(); } });
+  save(true);          /* teamoverzicht met de nieuwe naam */
+}
 function seasonStartYear(d){ d = d || new Date(); return d.getMonth() >= 5 ? d.getFullYear() : d.getFullYear() - 1; }
 function seasonLabel(y){ return y + "–" + (y + 1); }
 function normName(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,""); }
@@ -677,7 +796,7 @@ function newMatch(se, d){
   const m = { id:uid(), date:d.date, opponent:d.opponent, venue:d.venue,
     cfg:{ sport:d.sport, parts:d.parts, partMin:d.partMin, onField:d.onField },
     status:"live", created:Date.now(), appVersion:APP_VERSION, createdBy:USER.uid,
-    clock:{ part:0, parts:new Array(d.parts).fill(0), running:false, since:null },
+    clock:{ part:0, parts:new Array(d.parts).fill(0), running:false, since:null, otLog:[] },
     score:{ us:0, them:0 }, players:{}, log:[] };
   d.squad.forEach(p=>{
     m.players[p.n] = { n:p.n, f:p.f||"", l:p.l||"", status:p.start?"field":"bench",
@@ -851,7 +970,7 @@ function render(){
   if(USER && !READY && VIEW !== "profile") VIEW = "boot";
   ({ boot:renderBoot, login:renderLogin, profile:renderProfile,
      home:renderHome, season:renderSeason, setup:renderSetup, match:renderMatch,
-     summary:renderSummary, seasonstats:renderSeasonStats }[VIEW] || renderHome)();
+     summary:renderSummary, seasonstats:renderSeasonStats, members:renderMembers }[VIEW] || renderHome)();
   paintSync();
 }
 function nav(h){ $("#nav").innerHTML = h; }
@@ -874,6 +993,7 @@ function openMenu(){
   h += '<button class="row" onclick="closeModal();go(\'home\')"><div class="grow"><div class="t">Teams</div><div class="s">'+S.seasons.length+' in totaal</div></div><span class="chev">'+svg.chev+'</span></button>';
   if(se){
     h += '<button class="row" onclick="closeModal();go(\'season\')"><div class="grow"><div class="t">'+esc(teamLabel(se))+'</div><div class="s">'+esc(se.name)+' · '+se.matches.length+' wedstrijden</div></div><span class="chev">'+svg.chev+'</span></button>';
+    h += '<button class="row" onclick="closeModal();go(\'members\')"><div class="grow"><div class="t">Leden</div><div class="s">'+(se.members||[]).length+' in dit team</div></div><span class="chev">'+svg.chev+'</span></button>';
     h += '<button class="row" onclick="closeModal();go(\'seasonstats\')"><div class="grow"><div class="t">Seizoenstotalen</div></div><span class="chev">'+svg.chev+'</span></button>';
     h += '<button class="row" onclick="editRoster()"><div class="grow"><div class="t">Spelersbestand</div><div class="s">'+Object.keys(se.roster).length+' namen bewaard</div></div><span class="chev">'+svg.chev+'</span></button>';
   }
@@ -917,7 +1037,7 @@ function renderHome(){
   let h = '<h1 class="large">Teams</h1>';
   if(!S.seasons.length){
     const old = findOldData();
-    h += '<p class="muted" style="margin-bottom:14px">Nog geen teams. Een team hoort bij één seizoen, bijvoorbeeld KHC Dragons – U12 D1 in 2026–2027. Alle wedstrijden horen daarna bij dat team.</p>';
+    h += '<p class="muted" style="margin-bottom:14px">Nog geen teams. Een team hoort bij één seizoen, bijvoorbeeld KHC Dragons – U12 D1 in 2026–2027. Heeft iemand jouw team al aangemaakt, vraag die persoon dan een code.</p>';
     if(old){
       const nm = old.seasons.reduce((t,x)=> t + (x.matches||[]).length, 0);
       h += '<div class="card"><button class="row" onclick="startImport(findOldData())"><div class="grow"><div class="t">Gegevens uit Bankwacht overnemen</div>'+
@@ -938,7 +1058,7 @@ function renderHome(){
     });
     h += '</div>';
   }
-  h += '<div class="pad"><button class="btn" onclick="askSeason()">Nieuw team</button></div>';
+  h += '<div class="pad"><button class="btn" onclick="addTeamSheet()">Team toevoegen</button></div>';
   h += '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div>';
   $("#view").innerHTML = h;
 }
@@ -948,38 +1068,108 @@ function seasonOptions(sel){
   if(sel && opts.indexOf(sel) < 0) opts.unshift(sel);
   return opts.map(o=> '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>').join("");
 }
+const CODE_HELP = 'Een code krijg je van een hoofdgebruiker van het team. Die maakt ze aan via Menu → Leden → Code aanmaken en kan ze je doorsturen. Een code werkt één keer en hoogstens 24 uur.';
+function addTeamSheet(){
+  openModal("Team toevoegen",
+    '<div class="card"><button class="opt" onclick="joinSheet()"><span style="flex:1"><span style="display:block">Ik heb een code</span>'+
+      '<span style="display:block;font-size:13px;color:var(--text2)">voor een team dat al bestaat</span></span><span class="chev">'+svg.chev+'</span></button>'+
+    '<button class="opt" onclick="askSeason()"><span style="flex:1"><span style="display:block">Nieuw team aanmaken</span>'+
+      '<span style="display:block;font-size:13px;color:var(--text2)">je wordt er hoofdgebruiker van</span></span><span class="chev">'+svg.chev+'</span></button></div>'+
+    '<p class="muted" style="margin-top:14px">'+CODE_HELP+'</p><div style="height:10px"></div>');
+}
+let NT = null;   /* nieuw team in opbouw */
 function askSeason(){
-  const lastClub = (S.seasons.find(x=> (x.club||"").trim()) || {}).club || "";
+  const last = S.seasons.find(x=> clubName(x));
+  NT = { club: last ? clubName(last) : "", team:"", season: seasonLabel(seasonStartYear()), clubId:null };
+  drawNewTeam();
+}
+function drawNewTeam(){
   openModal("Nieuw team",
-    '<div class="card"><div class="row"><label class="lbl" for="sClub">Club</label><input type="text" id="sClub" value="'+esc(lastClub)+'" placeholder="bv. KHC Dragons" autocomplete="off"></div>'+
-    '<div class="row"><label class="lbl" for="sTeam">Team</label><input type="text" id="sTeam" placeholder="bv. U12 D1" autocomplete="off"></div>'+
-    '<div class="row"><label class="lbl" for="sName">Seizoen</label><select id="sName">'+seasonOptions(seasonLabel(seasonStartYear()))+'</select></div></div>'+
+    '<div class="card"><div class="row"><label class="lbl" for="sClub">Club</label><input type="text" id="sClub" value="'+esc(NT.club)+'" placeholder="bv. KHC Dragons" autocomplete="off"></div>'+
+    '<div id="clubSug"></div>'+
+    '<div class="row"><label class="lbl" for="sTeam">Team</label><input type="text" id="sTeam" value="'+esc(NT.team)+'" placeholder="bv. U12 D1" autocomplete="off"></div>'+
+    '<div class="row"><label class="lbl" for="sName">Seizoen</label><select id="sName">'+seasonOptions(NT.season)+'</select></div></div>'+
     '<p class="muted">Elk seizoen krijgt een eigen team, ook als de naam hetzelfde blijft. Spelers van vorig seizoen kan je zo meteen overnemen.</p>'+
-    '<div class="pad"><button class="btn" id="sGo">Team aanmaken</button></div>',
+    '<div class="pad"><button class="btn" id="sGo">Verder</button></div>',
     { onMount(mo){
-        const c = mo.querySelector("#sClub"), t = mo.querySelector("#sTeam");
+        const c = mo.querySelector("#sClub"), t = mo.querySelector("#sTeam"), sg = mo.querySelector("#clubSug");
+        const sug = ()=>{
+          const exact = Object.values(CLUBS).some(x=> x.name.trim().toLowerCase() === c.value.trim().toLowerCase());
+          const list = exact ? [] : clubSuggestions(c.value);
+          sg.innerHTML = list.map(x=> '<button class="opt" data-club="'+esc(x.id)+'" style="padding:10px 16px 10px 32px;font-size:15px;color:var(--tint)">'+esc(x.name)+'</button>').join("");
+          sg.querySelectorAll("[data-club]").forEach(el=> el.onclick = ()=>{ c.value = CLUBS[el.dataset.club].name; sug(); t.focus(); });
+        };
+        c.addEventListener("input", sug); sug();
         const fire = ()=>{
-          const club = c.value.trim(), team = t.value.trim(), nm = mo.querySelector("#sName").value;
-          if(!team){ t.focus(); toast("Geef een teamnaam"); return; }
-          const key = normName(club + team);
-          const twin = S.seasons.find(x=> x.name === nm && normName((x.club||"") + (x.team||"")) === key);
-          if(twin){ confirmTwinTeam(club, team, nm, twin); return; }
-          createTeamFlow(club, team, nm);
+          NT.club = c.value.trim(); NT.team = t.value.trim(); NT.season = mo.querySelector("#sName").value;
+          if(!NT.club){ c.focus(); toast("Geef de club"); return; }
+          if(!NT.team){ t.focus(); toast("Geef een teamnaam"); return; }
+          checkClub();
         };
         mo.querySelector("#sGo").onclick = fire;
         [c,t].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); }));
-        setTimeout(()=>{ try{ (lastClub ? t : c).focus(); }catch(e){} }, 220);
+        setTimeout(()=>{ try{ (NT.club ? t : c).focus(); }catch(e){} }, 220);
       }});
 }
-function confirmTwinTeam(club, team, nm, twin){
-  openModal("Dit team bestaat al",
-    '<p class="muted">Je hebt al <b>'+esc(teamLabel(twin))+'</b> in '+esc(nm)+', met '+twin.matches.length+' wedstrijd'+(twin.matches.length===1?"":"en")+'. Wil je dat team openen?</p>'+
-    '<div class="pad"><button class="btn" onclick="openSeason(\''+twin.id+'\')">Bestaand team openen</button></div>'+
-    '<div class="pad" style="padding-top:0"><button class="btn ghost" id="twGo">Toch een nieuw team aanmaken</button></div>',
-    { onMount(mo){ mo.querySelector("#twGo").onclick = ()=> createTeamFlow(club, team, nm); } });
+/* stap 1: bestaat de club al (of iets dat er hard op lijkt)? */
+function checkClub(){
+  const n = normClub(NT.club);
+  const same = Object.values(CLUBS).find(x=> x.name.trim().toLowerCase() === NT.club.toLowerCase())
+            || Object.values(CLUBS).find(x=> x.norm === n);
+  if(same){ NT.clubId = same.id; NT.club = same.name; return checkTeam(); }
+  const sim = similarClubs(NT.club);
+  if(!sim.length){ NT.clubId = null; return checkTeam(); }
+  let h = '<p class="muted">Er bestaat al een club die er hard op lijkt. Gebruik liefst die, dan vinden teamgenoten elkaar makkelijker.</p><div class="card">';
+  sim.slice(0,4).forEach(x=>{
+    h += '<button class="opt" data-pick="'+esc(x.id)+'"><span style="flex:1">'+esc(x.name)+'</span><span style="color:var(--tint);font-size:14px;font-weight:600">gebruiken</span></button>';
+  });
+  h += '</div><div class="pad"><button class="btn ghost" id="cNew">Nieuwe club "'+esc(NT.club)+'" aanmaken</button></div>'+
+       '<div class="pad" style="padding-top:0"><button class="btn ghost" id="cBack">Terug</button></div>';
+  openModal("Bedoel je deze club?", h, { onMount(mo){
+    mo.querySelectorAll("[data-pick]").forEach(el=> el.onclick = ()=>{ NT.clubId = el.dataset.pick; NT.club = CLUBS[NT.clubId].name; checkTeam(); });
+    mo.querySelector("#cNew").onclick = ()=>{ NT.clubId = null; checkTeam(); };
+    mo.querySelector("#cBack").onclick = drawNewTeam;
+  }});
 }
-function createTeamFlow(club, team, nm){
-  const s = newTeam(club, team, nm);
+/* stap 2: heb je dit team zelf al, of bestaat het al bij iemand anders? */
+async function checkTeam(){
+  const key = normName(NT.team);
+  const mine = S.seasons.find(x=> x.name === NT.season && normName(x.team) === key &&
+    ((NT.clubId && x.clubId === NT.clubId) || normClub(clubName(x)) === normClub(NT.club)));
+  if(mine) return confirmTwinTeam(mine);
+  if(NT.clubId && navigator.onLine && window.FB){
+    const F = window.FB;
+    try{
+      const snap = await F.getDocs(F.query(F.collection(F.db, "directory"), F.where("clubId", "==", NT.clubId), F.where("season", "==", NT.season)));
+      const hits = snap.docs.map(d=> d.data()).filter(d=> !S.seasons.some(x=> x.id === d.teamId))
+        .filter(d=> d.norm === key || (key.length >= 3 && lev(d.norm||"", key) <= 1));
+      if(hits.length) return confirmElsewhere(hits);
+    }catch(e){ console.warn("teamoverzicht niet bereikbaar", e); }
+  }
+  createTeamFlow();
+}
+function confirmTwinTeam(twin){
+  openModal("Dit team bestaat al",
+    '<p class="muted">Je hebt al <b>'+esc(teamLabel(twin))+'</b> in '+esc(twin.name)+', met '+twin.matches.length+' wedstrijd'+(twin.matches.length===1?"":"en")+'. Wil je dat team openen?</p>'+
+    '<div class="pad"><button class="btn" onclick="openSeason(\''+twin.id+'\')">Bestaand team openen</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="createTeamFlow()">Toch een nieuw team aanmaken</button></div>');
+}
+function confirmElsewhere(hits){
+  let h = '<p class="muted">Dit team lijkt al te bestaan. Word je liever lid van het bestaande team? Dan zie je dezelfde spelers en wedstrijden als je teamgenoten.</p><div class="card">';
+  hits.slice(0,3).forEach(d=>{
+    const who = (d.admins||[]).join(", ");
+    h += '<div class="row"><div class="grow"><div class="t">'+esc((CLUBS[d.clubId] ? CLUBS[d.clubId].name : d.club) + " – " + d.team)+'</div>'+
+         '<div class="s" style="white-space:normal">'+esc(d.season)+(who ? ' · vraag een code aan '+esc(who) : '')+'</div></div></div>';
+  });
+  h += '</div><p class="muted" style="margin-top:12px">'+CODE_HELP+'</p>'+
+       '<div class="pad"><button class="btn" onclick="joinSheet()">Ik heb een code</button></div>'+
+       '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="createTeamFlow()">Toch een nieuw team aanmaken</button></div>';
+  openModal("Bestaat dit team al?", h);
+}
+function createTeamFlow(){
+  const clubId = NT.clubId || createClub(NT.club);
+  const s = newTeam(clubId, NT.club, NT.team, NT.season);
+  NT = null;
   closeModal(true);
   carryStart(s.id);
 }
@@ -1051,41 +1241,72 @@ function carryDo(newId, srcId){
 function editSeasonName(id){
   const s = S.seasons.find(x=>x.id===id); if(!s) return;
   openModal("Team aanpassen",
-    '<div class="card"><div class="row"><label class="lbl" for="eClub">Club</label>'+
-    '<input type="text" id="eClub" value="'+esc(s.club||"")+'" autocomplete="off"></div>'+
+    '<div class="card"><button class="row" onclick="clubSheet(\''+s.id+'\')"><div class="grow"><div class="t">Club</div></div>'+
+    '<div class="v">'+esc(clubName(s) || "kiezen")+'</div><span class="chev">'+svg.chev+'</span></button>'+
     '<div class="row"><label class="lbl" for="eTeam">Team</label>'+
     '<input type="text" id="eTeam" value="'+esc(s.team||"")+'" autocomplete="off"></div>'+
     '<div class="row"><label class="lbl" for="eSeas">Seizoen</label><select id="eSeas">'+seasonOptions(s.name)+'</select></div></div>'+
     '<div class="pad"><button class="btn" id="eGo">Bewaren</button></div>',
     { onMount(mo){
-        const c = mo.querySelector("#eClub"), a = mo.querySelector("#eTeam"), b = mo.querySelector("#eSeas");
+        const a = mo.querySelector("#eTeam"), b = mo.querySelector("#eSeas");
         const fire = ()=>{
           const t = a.value.trim();
           if(!t){ a.focus(); toast("Geef een teamnaam"); return; }
-          s.club = c.value.trim(); s.team = t; s.name = b.value || s.name;
+          s.team = t; s.name = b.value || s.name;
           save(true); closeModal(); render();
         };
         mo.querySelector("#eGo").onclick = fire;
-        [c,a].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); }));
+        a.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); });
+      }});
+}
+/* clubnaam verbeteren: geldt voor alle teams van die club, bij iedereen */
+function clubSheet(teamId){
+  const se = S.seasons.find(x=> x.id === teamId); if(!se) return;
+  if(!se.clubId || !CLUBS[se.clubId]){
+    se.clubId = createClub((clubName(se) || "Club").trim()); save(true);
+  }
+  const c = CLUBS[se.clubId];
+  openModal("Naam van de club",
+    '<div class="card"><div class="row"><label class="lbl" for="kName">Club</label><input type="text" id="kName" value="'+esc(c.name)+'" autocomplete="off"></div></div>'+
+    '<p class="muted">Staat de naam verkeerd in de app? Verbeter ze hier. Dit verandert de naam voor alle teams van deze club, ook bij andere gebruikers.</p>'+
+    '<div class="pad"><button class="btn" id="kGo">Naam verbeteren</button></div>',
+    { onMount(mo){
+        const el = mo.querySelector("#kName");
+        const fire = ()=>{
+          const v = el.value.trim();
+          if(!v){ el.focus(); toast("Geef een naam"); return; }
+          if(v === c.name){ closeModal(); return; }
+          if(!navigator.onLine){ toast("Hiervoor is internet nodig"); return; }
+          const sim = similarClubs(v, c.id);
+          if(sim.length){
+            openModal("Deze club bestaat al",
+              '<p class="muted">Er is al een club <b>'+esc(sim[0].name)+'</b>. Met een nieuwe naam worden het nog geen één club: de teams blijven bij hun eigen club. Laat het weten aan de beheerder van de app als twee clubs samengevoegd moeten worden.</p>'+
+              '<div class="pad"><button class="btn" id="kYes">Toch hernoemen naar "'+esc(v)+'"</button></div>'+
+              '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>',
+              { onMount(m2){ m2.querySelector("#kYes").onclick = ()=>{ renameClub(c.id, se.id, v); closeModal(); render(); toast("Clubnaam aangepast"); }; } });
+            return;
+          }
+          renameClub(c.id, se.id, v); closeModal(); render(); toast("Clubnaam aangepast");
+        };
+        mo.querySelector("#kGo").onclick = fire;
+        el.addEventListener("keydown", e=>{ if(e.key==="Enter") fire(); });
       }});
 }
 function editMatchNames(){
   const m = match(), se = season(); if(!m || !se) return;
   openModal("Naam aanpassen",
-    '<div class="card"><div class="row"><label class="lbl" for="mClub">Club</label>'+
-    '<input type="text" id="mClub" value="'+esc(se.club||"")+'" autocomplete="off"></div>'+
-    '<div class="row"><label class="lbl" for="mTeam">Team</label>'+
+    '<div class="card"><div class="row"><label class="lbl" for="mTeam">Team</label>'+
     '<input type="text" id="mTeam" value="'+esc(se.team||"")+'" autocomplete="off"></div>'+
     '<div class="row"><label class="lbl" for="mOpp">Tegenstander</label>'+
     '<input type="text" id="mOpp" value="'+esc(m.opponent||"")+'" autocomplete="off"></div></div>'+
-    '<p class="muted">Club en team gelden voor alle wedstrijden van dit team, de tegenstander enkel voor deze wedstrijd.</p>'+
+    '<p class="muted">De teamnaam geldt voor alle wedstrijden van dit team, de tegenstander enkel voor deze wedstrijd. De clubnaam verbeter je via het team.</p>'+
     '<div class="pad"><button class="btn" id="mGo">Bewaren</button></div>',
     { onMount(mo){
         const a = mo.querySelector("#mTeam"), b = mo.querySelector("#mOpp");
         const fire = ()=>{
           const t = a.value.trim();
           if(!t){ a.focus(); toast("Geef een teamnaam"); return; }
-          se.team = t; se.club = mo.querySelector("#mClub").value.trim(); m.opponent = b.value.trim();
+          se.team = t; m.opponent = b.value.trim();
           save(true); closeModal(); render();
         };
         mo.querySelector("#mGo").onclick = fire;
@@ -1113,6 +1334,9 @@ function renderSeason(){
   nav(menuBtn() + navTitle(teamLabel(se), se.name, "editSeasonName('"+se.id+"')") +
       (se.matches.length ? '<button class="nav-btn txt" onclick="seasonEdit=!seasonEdit;renderSeason()">'+(seasonEdit?"Klaar":"Wijzig")+'</button>' : '<div style="width:44px"></div>'));
   let h = '<div class="pad"><button class="btn" onclick="go(\'setup\')">Nieuwe wedstrijd</button></div>';
+  const nm = (se.members||[]).length;
+  h += '<div class="card"><button class="row" onclick="go(\'members\')"><div class="grow"><div class="t">Leden</div>'+
+       '<div class="s">'+nm+' '+(nm===1?"persoon":"personen")+(isAdmin(se)?" · jij bent hoofdgebruiker":"")+'</div></div><span class="chev">'+svg.chev+'</span></button></div>';
   const live = se.matches.filter(m=>m.status==="live"), done = se.matches.filter(m=>m.status!=="live");
   if(live.length){ h += '<div class="sec">Loopt nu</div><div class="card">' + live.map(matchRow).join("") + '</div>'; }
   h += '<div class="sec">Wedstrijden</div>';
@@ -1321,8 +1545,10 @@ function paint(){
     : '<span class="pill '+(partMs?"paused":"")+'">'+(partMs ? (over?"tijd om":"stil") : "klaar om te starten")+'</span>';
 
   // het moment waarop de reguliere tijd voorbij is, één keer loggen
-  if(!Array.isArray(c.otLog)) c.otLog = [];
-  if(over && !c.otLog[c.part]){
+  /* enkel iets aanpassen als er echt gelogd wordt: anders lijkt de wedstrijd op dit toestel
+     'gewijzigd' en worden wijzigingen van andere toestellen niet overgenomen */
+  if(over && !(Array.isArray(c.otLog) && c.otLog[c.part])){
+    if(!Array.isArray(c.otLog)) c.otLog = [];
     c.otLog[c.part] = true;
     m.log.push({ t: prevPartsMs(m, c.part) + limit, part: c.part, wall: Date.now(),
       text: "Reguliere tijd " + ordinalPart(c.part, m.cfg.parts).toLowerCase() + " voorbij — extra tijd loopt" });
@@ -1720,6 +1946,236 @@ function editRoster(){
 function setRoster(n, k, v){ const se = season(); se.roster[n] = Object.assign({f:"",l:""}, se.roster[n]); se.roster[n][k] = v.trim(); save(true); }
 function delRoster(n){ const se = season(); delete se.roster[n]; save(true); editRoster(); }
 
+/* ---------- leden, codes en lid worden ---------- */
+const CODE_WORDS = ["UMPIRE","STICK","BALL","CORNER","GOAL","KEEPER","PUSH","FLICK","SLAP","HIT","SCOOP","PASS","TACKLE","CIRCLE",
+  "BACKHAND","REVERSE","TOMAHAWK","AERIAL","SHOOTOUT","STROKE","PENALTY","CARD","WHISTLE","SAVE","SCORE","ASSIST","TURF","PITCH",
+  "BENCH","COACH","CAPTAIN","TEAM","CLUB","GRIP","TAPE","HOOK","KICKBACK","HALFTIME","DRIBBLE","DRAG"];
+const DAY_MS = 24 * 3600 * 1000;
+function timeNL(ms){ const d = new Date(ms); return d.toLocaleTimeString("nl-BE", { hour:"2-digit", minute:"2-digit" }); }
+function dayTimeNL(ms){
+  const d = new Date(ms), today = new Date();
+  const same = d.toDateString() === today.toDateString();
+  return (same ? "vandaag" : "morgen") + " om " + timeNL(ms);
+}
+function activeInvite(se){ return se && se.invite && se.invite.code && se.invite.until > Date.now() ? se.invite : null; }
+
+function renderMembers(){
+  const se = season(); if(!se) return go("home");
+  nav(backBtn("season") + navTitle("Leden", teamLabel(se) + " · " + se.name) + '<div style="width:44px"></div>');
+  const me = USER.uid, admin = isAdmin(se), ppl = se.people || {};
+  const list = (se.members||[]).slice().sort((a,b)=>{
+    const aa = (se.admins||[]).indexOf(a) >= 0, ba = (se.admins||[]).indexOf(b) >= 0;
+    return (ba - aa) || fullOf(ppl[a]).localeCompare(fullOf(ppl[b]));
+  });
+  let h = '<div class="sec">'+list.length+' '+(list.length===1?"lid":"leden")+'</div><div class="card">';
+  list.forEach(u=>{
+    const isA = (se.admins||[]).indexOf(u) >= 0;
+    const tags = [isA ? "hoofdgebruiker" : "", u === me ? "jij" : ""].filter(Boolean).join(" · ");
+    const canTap = admin || (u === me && isA);
+    h += '<'+(canTap?'button':'div')+' class="row"'+(canTap?' onclick="memberSheet(\''+esc(u)+'\')"':'')+'><div class="grow"><div class="t">'+esc(fullOf(ppl[u]) || "Onbekend lid")+'</div>'+
+         (tags ? '<div class="s">'+tags+'</div>' : '')+'</div>'+(canTap?'<span class="chev">'+svg.chev+'</span>':'')+'</'+(canTap?'button':'div')+'>';
+  });
+  h += '</div>';
+
+  h += '<div class="sec">Iemand toevoegen</div>';
+  if(admin){
+    const inv = activeInvite(se);
+    if(inv){
+      h += '<div class="card"><div class="row" style="flex-direction:column;align-items:center;padding:18px 16px">'+
+           '<div class="num" style="font-size:34px;font-weight:700;letter-spacing:.04em">'+esc(inv.code)+'</div>'+
+           '<div class="s" style="margin-top:4px">geldig tot '+esc(dayTimeNL(inv.until))+', één keer te gebruiken</div></div>'+
+           '<button class="opt" onclick="shareCode()"><span style="flex:1;color:var(--tint)">Code doorsturen</span></button>'+
+           '<button class="opt" onclick="makeCode()"><span style="flex:1;color:var(--tint)">Nieuwe code</span><span style="font-size:13px;color:var(--text2)">de oude werkt dan niet meer</span></button></div>';
+    }else{
+      h += '<div class="pad" style="padding-top:0"><button class="btn" id="mkCode" onclick="makeCode()">Code aanmaken</button></div>';
+    }
+    h += '<p class="muted">Stuur de code naar wie mee in dit team moet. Die kiest in de app Team toevoegen → Ik heb een code. Elke nieuwe persoon heeft een eigen code nodig.</p>';
+  }else{
+    const who = (se.admins||[]).map(u=> shortOf(ppl[u])).filter(Boolean).join(", ");
+    h += '<p class="muted" style="margin-top:0">Een code voor een nieuw lid maakt een hoofdgebruiker aan'+(who ? ': '+esc(who) : '')+'.</p>';
+  }
+  h += '<div class="pad" style="padding-top:22px"><button class="btn ghost" style="color:var(--danger)" onclick="askLeave()">Team verlaten</button></div>';
+  $("#view").innerHTML = h;
+}
+
+async function makeCode(){
+  const se = season(); if(!se || !isAdmin(se)) return;
+  if(!navigator.onLine || !window.FB){ toast("Hiervoor is internet nodig"); return; }
+  const btn = document.getElementById("mkCode"); if(btn){ btn.disabled = true; btn.textContent = "Code aanmaken…"; }
+  const F = window.FB;
+  if(se.invite && se.invite.code){
+    const old = F.writeBatch(F.db); old.delete(F.doc(F.db, "invites", se.invite.code)); trackCommit(old, true);
+  }
+  for(let tries = 0; tries < 8; tries++){
+    const code = CODE_WORDS[Math.floor(Math.random() * CODE_WORDS.length)] + "-" + (10 + Math.floor(Math.random() * 90));
+    try{
+      const ex = await F.getDoc(F.doc(F.db, "invites", code));
+      if(ex.exists()) continue;
+    }catch(e){ console.warn(e); break; }
+    const b = F.writeBatch(F.db);
+    b.set(F.doc(F.db, "invites", code), { teamId:se.id, createdBy:USER.uid, createdByName:userShort(),
+      created:F.serverTimestamp(), used:false, usedBy:null });
+    const ok = await trackCommit(b, true);
+    if(ok){
+      se.invite = { code, until: Date.now() + DAY_MS - 60000 };
+      save(true);
+      if(VIEW === "members") renderMembers();
+      return;
+    }
+  }
+  toast("Code aanmaken lukte niet. Probeer opnieuw.", 3500);
+  if(VIEW === "members") renderMembers();
+}
+async function shareCode(){
+  const se = season(), inv = activeInvite(se); if(!inv) return;
+  const url = location.origin + location.pathname;
+  const txt = "Word lid van " + teamLabel(se) + " (" + se.name + ") in " + APP_NAME + ".\n\n" +
+    "1. Open " + url + "\n2. Meld je aan\n3. Kies Team toevoegen → Ik heb een code\n4. Vul in: " + inv.code + "\n\n" +
+    "De code werkt één keer en tot " + dayTimeNL(inv.until) + ".";
+  try{
+    if(navigator.share){ await navigator.share({ title:"Code voor " + teamLabel(se), text:txt }); return; }
+    await navigator.clipboard.writeText(txt); toast("Gekopieerd, plak het in een bericht");
+  }catch(e){
+    if(e && e.name === "AbortError") return;
+    openModal("Code doorsturen", '<div class="pad"><textarea class="ta" readonly>'+esc(txt)+'</textarea></div>');
+  }
+}
+
+function memberSheet(u){
+  const se = season(); if(!se) return;
+  const ppl = se.people || {}, isA = (se.admins||[]).indexOf(u) >= 0, me = u === USER.uid;
+  const name = fullOf(ppl[u]) || "Onbekend lid";
+  let h = '<div class="card">';
+  if(isA){
+    if((se.admins||[]).length > 1) h += '<button class="opt" onclick="setAdmin(\''+esc(u)+'\',false)"><span style="flex:1">Geen hoofdgebruiker meer</span></button>';
+    else h += '<div class="row"><div class="s" style="white-space:normal">'+(me?"Je bent":"Dit is")+' de enige hoofdgebruiker. Duid eerst iemand anders aan.</div></div>';
+  }else if(isAdmin(se)){
+    h += '<button class="opt" onclick="setAdmin(\''+esc(u)+'\',true)"><span style="flex:1">Hoofdgebruiker maken</span><span style="font-size:13px;color:var(--text2)">kan codes aanmaken en leden beheren</span></button>';
+  }
+  if(!me && isAdmin(se)) h += '<button class="opt" onclick="askRemove(\''+esc(u)+'\')"><span style="flex:1;color:var(--danger)">Uit het team zetten</span></button>';
+  h += '</div><div style="height:12px"></div>';
+  openModal(name, h);
+}
+function setAdmin(u, on){
+  const se = season(); if(!se || !isAdmin(se)) return;
+  if(!navigator.onLine){ toast("Hiervoor is internet nodig"); return; }
+  const a = (se.admins||[]).filter(x=> x !== u);
+  if(on) a.push(u);
+  if(!a.length){ toast("Een team heeft minstens één hoofdgebruiker nodig"); return; }
+  se.admins = a; save(true); closeModal(); renderMembers();
+  toast(on ? "Hoofdgebruiker aangeduid" : "Niet langer hoofdgebruiker");
+}
+function askRemove(u){
+  const se = season(); if(!se) return;
+  const name = fullOf((se.people||{})[u]) || "Dit lid";
+  openModal("Uit het team zetten",
+    '<p class="muted">'+esc(name)+' ziet dit team en de wedstrijden niet meer. Wat die persoon al noteerde, blijft staan. Later terugkomen kan met een nieuwe code.</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="doRemoveMember(\''+esc(u)+'\')">Uit het team zetten</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+}
+function doRemoveMember(u){
+  const se = season(); if(!se || !isAdmin(se)) return;
+  if(!navigator.onLine){ toast("Hiervoor is internet nodig"); return; }
+  se.members = (se.members||[]).filter(x=> x !== u);
+  se.admins = (se.admins||[]).filter(x=> x !== u);
+  se.people = Object.assign({}, se.people); delete se.people[u];
+  save(true); closeModal(); renderMembers(); toast("Uit het team gezet");
+}
+function askLeave(){
+  const se = season(); if(!se) return;
+  const others = (se.members||[]).filter(x=> x !== USER.uid);
+  if(!others.length){
+    openModal("Team verlaten",
+      '<p class="muted">Je bent het enige lid. Als je vertrekt, heeft niemand nog toegang. Wil je het team met alle wedstrijden verwijderen?</p>'+
+      '<div class="pad"><button class="btn dngr" onclick="closeModal(true);askDelSeason(\''+se.id+'\')">Team verwijderen</button></div>'+
+      '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+    return;
+  }
+  if(isAdmin(se) && (se.admins||[]).length === 1){
+    openModal("Team verlaten",
+      '<p class="muted">Je bent de enige hoofdgebruiker. Duid eerst iemand anders aan als hoofdgebruiker: tik in de ledenlijst op die persoon.</p>'+
+      '<div class="pad"><button class="btn" onclick="closeModal()">OK</button></div>');
+    return;
+  }
+  openModal("Team verlaten",
+    '<p class="muted">Je ziet <b>'+esc(teamLabel(se))+'</b> dan niet meer. Het team en de wedstrijden blijven bestaan voor de andere leden. Terugkomen kan met een nieuwe code.</p>'+
+    '<div class="pad"><button class="btn dngr" onclick="doLeave()">Team verlaten</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>');
+}
+async function doLeave(){
+  const se = season(); if(!se) return;
+  if(!navigator.onLine || !window.FB){ toast("Hiervoor is internet nodig"); return; }
+  flush();
+  const F = window.FB, b = F.writeBatch(F.db);
+  b.update(F.doc(F.db, "teams", se.id), { members:F.arrayRemove(USER.uid), admins:F.arrayRemove(USER.uid),
+    ["people." + USER.uid]:F.deleteField(), updatedAt:F.serverTimestamp(), updatedBy:USER.uid });
+  closeModal(true);
+  const ok = await trackCommit(b, true);
+  if(!ok){ toast("Verlaten lukte niet. Probeer opnieuw.", 3500); return; }
+  const label = teamLabel(se);
+  removeTeamLocal(se.id);
+  go("home"); toast("Je hebt " + label + " verlaten");
+}
+
+/* lid worden met een code */
+function parseCode(t){
+  const s = String(t||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Z0-9]/g,"");
+  const m = s.match(/^([A-Z]{2,})(\d{2})$/);
+  return m ? m[1] + "-" + m[2] : null;
+}
+function joinSheet(msg){
+  openModal("Code invoeren",
+    '<div class="card"><div class="row"><label class="lbl" for="jCode">Code</label><input type="text" id="jCode" placeholder="bv. STICK-42" autocomplete="off" autocapitalize="characters" spellcheck="false"></div></div>'+
+    (msg ? '<p class="muted" style="color:var(--danger)">'+esc(msg)+'</p>' : '')+
+    '<p class="muted">'+CODE_HELP+'</p>'+
+    '<div class="pad"><button class="btn" id="jGo">Verder</button></div>',
+    { onMount(mo){
+        const el = mo.querySelector("#jCode");
+        const fire = ()=> checkCode(el.value, mo);
+        mo.querySelector("#jGo").onclick = fire;
+        el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); });
+        setTimeout(()=>{ try{ el.focus(); }catch(e){} }, 220);
+      }});
+}
+async function checkCode(raw, mo){
+  const code = parseCode(raw);
+  if(!code) return joinSheet("Een code bestaat uit een hockeywoord en twee cijfers, bv. STICK-42.");
+  if(!navigator.onLine || !window.FB) return joinSheet("Om lid te worden is internet nodig.");
+  const btn = mo && mo.querySelector("#jGo"); if(btn){ btn.disabled = true; btn.textContent = "Code nakijken…"; }
+  const F = window.FB;
+  let inv = null, dir = null;
+  try{
+    const snap = await F.getDoc(F.doc(F.db, "invites", code));
+    inv = snap.exists() ? snap.data() : null;
+  }catch(e){ console.warn(e); return joinSheet("De code kon niet nagekeken worden. Probeer opnieuw."); }
+  if(!inv) return joinSheet("De code " + code + " bestaat niet. Kijk ze na, of vraag een nieuwe.");
+  if(inv.used) return joinSheet("De code " + code + " is al gebruikt. Vraag een nieuwe aan de hoofdgebruiker.");
+  const created = tsOf(inv.created);
+  if(created && Date.now() > created + DAY_MS + 600000) return joinSheet("De code " + code + " is verlopen. Vraag een nieuwe aan de hoofdgebruiker.");
+  if(S.seasons.some(x=> x.id === inv.teamId)) return joinSheet("Je zit al in dit team.");
+  try{ const d = await F.getDoc(F.doc(F.db, "directory", inv.teamId)); dir = d.exists() ? d.data() : null; }catch(e){}
+  const label = dir ? ((CLUBS[dir.clubId] ? CLUBS[dir.clubId].name : dir.club) + " – " + dir.team) : "dit team";
+  openModal("Lid worden",
+    '<p class="muted">Je wordt lid van <b>'+esc(label)+'</b>'+(dir && dir.season ? ' ('+esc(dir.season)+')' : '')+
+    (inv.createdByName ? ', op uitnodiging van '+esc(inv.createdByName) : '')+(/\.$/.test(inv.createdByName||'') ? ' ' : '. ')+'Je ziet dan alle spelers en wedstrijden van dit team, en je naam komt in de ledenlijst.</p>'+
+    '<div class="pad"><button class="btn" id="jYes">Lid worden</button></div>'+
+    '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal()">Annuleren</button></div>',
+    { onMount(m2){ m2.querySelector("#jYes").onclick = ()=> doJoin(code, inv.teamId, m2); } });
+}
+async function doJoin(code, teamId, mo){
+  const btn = mo && mo.querySelector("#jYes"); if(btn){ btn.disabled = true; btn.textContent = "Bezig…"; }
+  const F = window.FB, b = F.writeBatch(F.db);
+  b.update(F.doc(F.db, "teams", teamId), { members:F.arrayUnion(USER.uid),
+    ["people." + USER.uid]:{ f:(PROFILE&&PROFILE.first)||"", l:(PROFILE&&PROFILE.last)||"" },
+    joinCode:code, updatedAt:F.serverTimestamp(), updatedBy:USER.uid });
+  b.update(F.doc(F.db, "invites", code), { used:true, usedBy:USER.uid, usedAt:F.serverTimestamp() });
+  JOIN_PENDING = teamId;
+  const ok = await trackCommit(b, true);
+  if(!ok){ JOIN_PENDING = null; return joinSheet("Lid worden lukte niet. Misschien werd de code net gebruikt of is ze verlopen. Vraag een nieuwe."); }
+  closeModal(true);
+  toast("Je bent lid. Het team wordt geladen…", 3000);
+}
+
 /* ---------- back-up en overnemen ---------- */
 function backupSheet(){
   openModal("Back-up",
@@ -1731,7 +2187,7 @@ function backupSheet(){
 }
 function backupData(){
   return JSON.stringify({ app:"hockey-bench-manager", appVersion:APP_VERSION, v:DATA_VERSION, exported:new Date().toISOString(),
-    seasons: S.seasons.map(se=> Object.assign(plain(teamContent(se)), { name:se.name, matches:plain(se.matches) })) });
+    seasons: S.seasons.map(se=> Object.assign(plain(teamContent(se)), { club:clubName(se), name:se.name, matches:plain(se.matches) })) });
 }
 function backupBlobName(){ return "hockey-bench-manager-" + new Date().toISOString().slice(0,10) + ".json"; }
 function markBackup(){ S.lastBackup = new Date().toISOString().slice(0,10); uiSave(); }
@@ -1820,9 +2276,16 @@ function doImport(mo){
   d.seasons.forEach((se,i)=>{
     const team = stripClub(mo.querySelector("#iT"+i).value, club) || "Team";
     const nm = mo.querySelector("#iS"+i).value.trim() || seasonLabel(seasonStartYear());
-    const t = { id:se.id, club: club || se.club || "", team, name:nm, created:se.created || Date.now(),
+    const cname = club || se.club || "";
+    let clubId = "";
+    if(cname){
+      const hit = Object.values(CLUBS).find(x=> x.norm === normClub(cname));
+      clubId = hit ? hit.id : createClub(cname);
+    }
+    const t = { id:se.id, clubId, club:cname, team, name:nm, created:se.created || Date.now(),
       roster:se.roster || {}, matches:(se.matches||[]).filter(m=> m && m.id),
-      members:[USER.uid], admins:[USER.uid], createdBy:USER.uid };
+      members:[USER.uid], admins:[USER.uid], people:{ [USER.uid]:{ f:PROFILE.first||"", l:PROFILE.last||"" } },
+      invite:null, createdBy:USER.uid };
     S.seasons = S.seasons.filter(x=> x.id !== t.id);
     S.seasons.push(t);
     if(!first) first = t;
@@ -2031,7 +2494,7 @@ function renderProfile(){
   const first = !READY;
   const guess = PROFILE || splitName(USER && USER.displayName);
   nav((first ? '<div style="width:44px"></div>' : backBtn(season() ? "season" : "home")) + navTitle(first ? "Welkom" : "Je profiel") + '<div style="width:44px"></div>');
-  let h = first ? '<p class="muted" style="margin-top:18px">Hoe heet je? Je naam komt in het logboek bij wat je doet, zodat later ook je teamgenoten zien wie wat noteerde.</p>'
+  let h = first ? '<p class="muted" style="margin-top:18px">Hoe heet je? Je teamgenoten zien je naam in de ledenlijst en in het logboek bij wat je noteert.</p>'
                 : '<div style="height:18px"></div>';
   h += '<div class="card"><div class="row"><label class="lbl" for="pF">Voornaam</label><input type="text" id="pF" value="'+esc(guess.first||"")+'" autocomplete="given-name"></div>'+
        '<div class="row"><label class="lbl" for="pL">Achternaam</label><input type="text" id="pL" value="'+esc(guess.last||"")+'" autocomplete="family-name"></div>'+
@@ -2049,7 +2512,11 @@ function renderProfile(){
     F.setDoc(F.doc(F.db, "users", USER.uid), Object.assign({}, PROFILE, { updatedAt:F.serverTimestamp() }), { merge:true })
       .catch(e=> syncError(e));
     if(!wasReady){ if(!READY){ VIEW = "boot"; render(); maybeRoute(); } }
-    else { toast("Profiel bewaard"); go(season() ? "season" : "home"); }
+    else {
+      S.seasons.forEach(se=>{ se.people = Object.assign({}, se.people); se.people[USER.uid] = { f:fv, l:lv }; });
+      save(true);
+      toast("Profiel bewaard"); go(season() ? "season" : "home");
+    }
   };
   $("#pGo").onclick = fire;
   [f,l].forEach(el=> el.addEventListener("keydown", e=>{ if(e.key === "Enter") fire(); }));
@@ -2076,7 +2543,8 @@ import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, bro
   GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache,
-  doc, collection, query, where, onSnapshot, writeBatch, setDoc, serverTimestamp
+  doc, collection, query, where, onSnapshot, writeBatch, setDoc, serverTimestamp,
+  getDoc, getDocs, arrayUnion, arrayRemove, deleteField
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2103,6 +2571,7 @@ try{
 
 window.FB = {
   db, doc, collection, query, where, onSnapshot, writeBatch, setDoc, serverTimestamp,
+  getDoc, getDocs, arrayUnion, arrayRemove, deleteField,
   signInGoogle(mode){
     const p = new GoogleAuthProvider();
     p.setCustomParameters({ prompt: "select_account" });
