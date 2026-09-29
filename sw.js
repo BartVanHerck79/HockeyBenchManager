@@ -1,5 +1,7 @@
-/* Hockey Bench Manager service worker — netwerk eerst, cache als terugval */
-const CACHE = "hbm-3.1.0";
+/* Hockey Bench Manager service worker
+   Eigen bestanden: eerst uit de cache (snel opstarten, ook met slecht bereik aan het veld).
+   Een nieuwe versie komt binnen via een nieuwe sw.js, met een nieuwe cache. */
+const CACHE = "hbm-3.3.0";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
   "./apple-touch-icon-v5.png", "./favicon-16-v5.png", "./favicon-32-v5.png",
   "./favicon-64-v5.png", "./icon-192-v5.png", "./icon-512-v5.png"];
@@ -11,7 +13,9 @@ const FB_FILES = [FB + "firebase-app.js", FB + "firebase-auth.js", FB + "firebas
    zodat er nooit midden in een wedstrijd herladen wordt */
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c =>
-    c.addAll(ASSETS).catch(() => {})
+    /* cache: "reload" = voorbij de browsercache, zodat de nieuwe versie echt nieuw is */
+    Promise.all(ASSETS.map(u => fetch(new Request(u, { cache: "reload" }))
+        .then(r => r.ok ? c.put(u, r) : null).catch(() => {})))
       .then(() => Promise.all(FB_FILES.map(u => c.add(u).catch(() => {}))))
   ));
 });
@@ -28,31 +32,36 @@ self.addEventListener("activate", e => {
   );
 });
 
+function fromNet(req, key) {
+  return fetch(req).then(r => {
+    if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(key || req, copy)).catch(() => {}); }
+    return r;
+  });
+}
+
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  /* Firebase-bestanden: eerst uit de cache (vaste versie) */
   if (req.url.startsWith(FB)) {
-    e.respondWith(
-      caches.match(req).then(hit => hit || fetch(req).then(r => {
-        if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
-        return r;
-      }))
-    );
+    e.respondWith(caches.match(req).then(hit => hit || fromNet(req)));
     return;
   }
-
   /* al het andere van buiten deze site (aanmelden, databank) nooit aanraken */
   if (url.origin !== self.location.origin) return;
 
+  /* de pagina zelf (ook met ?code=...) altijd als index.html uit de cache */
+  const scopePath = new URL(self.registration.scope).pathname;
+  if (req.mode === "navigate" && (url.pathname === scopePath || url.pathname === scopePath + "index.html")) {
+    e.respondWith(
+      caches.match("./index.html").then(hit => hit || fromNet(req, "./index.html"))
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
   e.respondWith(
-    fetch(req)
-      .then(r => {
-        if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
-        return r;
-      })
-      .catch(() => caches.match(req).then(r => r || caches.match("./index.html")))
+    caches.match(req, { ignoreSearch: true }).then(hit => hit || fromNet(req))
+      .catch(() => caches.match("./index.html"))
   );
 });

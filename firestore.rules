@@ -1,40 +1,147 @@
 rules_version = '2';
 
-// Hockey Bench Manager 3.0 — databankregels
+// Hockey Bench Manager 3.3 — databankregels
 // Plak dit in Firebase: Firestore Database -> tabblad Regels (Rules) -> Publiceren (Publish).
+// Dit vervangt de vorige regels volledig.
 //
 // Wat deze regels doen:
 //  - Je profiel kan enkel jij lezen en aanpassen.
 //  - Een team en zijn wedstrijden zijn enkel zichtbaar voor de leden van dat team.
-//  - Wie een team aanmaakt, is er het enige lid en beheerder van.
-//  - In 3.0 kan niemand leden toevoegen of verwijderen. Dat komt in 3.1 met de teamcodes.
+//  - Clubs en het teamoverzicht (club, teamnaam, seizoen, namen van de hoofdgebruikers)
+//    zijn zichtbaar voor iedereen die aangemeld is, zodat bestaande teams gevonden worden.
+//  - Een clubnaam verbeteren mag iedereen die een team in die club heeft.
+//  - Codes: enkel een hoofdgebruiker maakt ze aan. Een code werkt één keer en hoogstens 24 uur.
+//    Codes kunnen niet opgelijst worden, enkel één voor één opgevraagd.
+//  - Hoofdgebruikers kunnen leden verwijderen en hoofdgebruikers aanduiden.
+//  - Elk lid mag zelf vertrekken, behalve de laatste hoofdgebruiker zolang er nog leden zijn.
+//  - Bij een nieuw seizoen mag een hoofdgebruiker leden van het vorige team meenemen.
+//  - Verwijderde wedstrijden gaan naar de prullenbak van het team.
+//  - Een lopende wedstrijd kan enkel gewijzigd worden door het toestel dat ze bedient
+//    (of door wie de bediening overneemt).
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function teamDoc(t) { return /databases/$(database)/documents/teams/$(t); }
+    function inviteDoc(c) { return /databases/$(database)/documents/invites/$(c); }
+    function stillValid(inv) { return request.time < inv.created + duration.value(24, 'h'); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     match /users/{userId} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if signedIn() && me() == userId;
+    }
+
+    match /clubs/{clubId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.createdBy == me()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0;
+      allow update: if signedIn()
+        && changed().hasOnly(['name', 'norm', 'viaTeam', 'updatedAt', 'updatedBy'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && me() in get(teamDoc(request.resource.data.viaTeam)).data.members
+        && get(teamDoc(request.resource.data.viaTeam)).data.clubId == clubId;
+      allow delete: if false;
+
+      match /history/{entry} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.by == me();
+      }
+    }
+
+    match /directory/{teamId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() in get(teamDoc(teamId)).data.members;
+    }
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.createdBy == me()
+        && request.resource.data.used == false
+        && request.resource.data.created == request.time
+        && me() in get(teamDoc(request.resource.data.teamId)).data.admins;
+      allow update: if signedIn()
+        && resource.data.used == false
+        && stillValid(resource.data)
+        && changed().hasOnly(['used', 'usedBy', 'usedAt'])
+        && request.resource.data.used == true
+        && request.resource.data.usedBy == me()
+        && me() in getAfter(teamDoc(resource.data.teamId)).data.members;
+      allow delete: if signedIn()
+        && (resource.data.used == true
+            || !stillValid(resource.data)
+            || me() in get(teamDoc(resource.data.teamId)).data.admins);
     }
 
     match /teams/{teamId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow read: if signedIn() && me() in resource.data.members;
 
       allow create: if signedIn()
-        && request.resource.data.members == [request.auth.uid]
-        && request.resource.data.admins == [request.auth.uid];
+        && request.resource.data.members == [me()]
+        && request.resource.data.admins == [me()];
 
+      // nieuw seizoen: een hoofdgebruiker van het vorige team neemt leden van dat team mee
+      allow create: if signedIn()
+        && me() in request.resource.data.members
+        && me() in request.resource.data.admins
+        && request.resource.data.members.hasAll(request.resource.data.admins)
+        && me() in get(teamDoc(request.resource.data.prevTeam)).data.admins
+        && get(teamDoc(request.resource.data.prevTeam)).data.members.hasAll(request.resource.data.members);
+
+      // gewone wijziging door een lid: ledenlijst en hoofdgebruikers blijven gelijk
       allow update: if signedIn()
-        && request.auth.uid in resource.data.members
-        && request.resource.data.members == resource.data.members
-        && request.resource.data.admins == resource.data.admins;
+        && me() in resource.data.members
+        && !changed().hasAny(['members', 'admins']);
 
-      allow delete: if signedIn() && request.auth.uid in resource.data.members;
+      // hoofdgebruiker: leden verwijderen en hoofdgebruikers aanduiden (niemand toevoegen)
+      allow update: if signedIn()
+        && me() in resource.data.admins
+        && resource.data.members.hasAll(request.resource.data.members)
+        && request.resource.data.members.hasAll(request.resource.data.admins)
+        && request.resource.data.admins.size() > 0;
+
+      // zelf vertrekken
+      allow update: if signedIn()
+        && me() in resource.data.members
+        && changed().hasOnly(['members', 'admins', 'people', 'updatedAt', 'updatedBy'])
+        && request.resource.data.members == resource.data.members.removeAll([me()])
+        && request.resource.data.admins == resource.data.admins.removeAll([me()])
+        && request.resource.data.admins.size() > 0;
+
+      // lid worden met een geldige code (de code wordt in dezelfde stap als gebruikt gemarkeerd)
+      allow update: if signedIn()
+        && !(me() in resource.data.members)
+        && changed().hasOnly(['members', 'people', 'joinCode', 'updatedAt', 'updatedBy'])
+        && request.resource.data.members == resource.data.members.concat([me()])
+        && get(inviteDoc(request.resource.data.joinCode)).data.teamId == teamId
+        && get(inviteDoc(request.resource.data.joinCode)).data.used == false
+        && stillValid(get(inviteDoc(request.resource.data.joinCode)).data)
+        && getAfter(inviteDoc(request.resource.data.joinCode)).data.usedBy == me();
+
+      allow delete: if signedIn() && me() in resource.data.members;
+
+      // prullenbak: verwijderde wedstrijden, 30 dagen terug te zetten
+      match /trash/{itemId} {
+        allow read, write: if signedIn() && me() in get(teamDoc(teamId)).data.members;
+      }
 
       match /matches/{matchId} {
-        allow read, write: if signedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members;
+        function isMember() { return me() in get(teamDoc(teamId)).data.members; }
+        allow read, create, delete: if signedIn() && isMember();
+        // Een lopende wedstrijd wordt door één toestel bediend (ctrl). Bij elke overname telt ctrl.n op.
+        // Zo weigert de databank oude wijzigingen van een toestel dat de bediening al kwijt is.
+        allow update: if signedIn() && isMember()
+          && (!('ctrl' in resource.data)
+              || (('ctrl' in request.resource.data)
+                  && (request.resource.data.ctrl.n == resource.data.ctrl.n
+                      || (request.resource.data.ctrl.n == resource.data.ctrl.n + 1
+                          && request.resource.data.ctrl.uid == me()))));
       }
     }
   }
