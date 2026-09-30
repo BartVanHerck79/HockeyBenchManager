@@ -1,7 +1,7 @@
 /* Hockey Bench Manager service worker
    Eigen bestanden: eerst uit de cache (snel opstarten, ook met slecht bereik aan het veld).
    Een nieuwe versie komt binnen via een nieuwe sw.js, met een nieuwe cache. */
-const CACHE = "hbm-3.3.0";
+const CACHE = "hbm-3.3.1";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
   "./apple-touch-icon-v5.png", "./favicon-16-v5.png", "./favicon-32-v5.png",
   "./favicon-64-v5.png", "./icon-192-v5.png", "./icon-512-v5.png"];

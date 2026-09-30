@@ -256,7 +256,7 @@ table.st tr:last-child td{border-bottom:0}
    Hockey Bench Manager — speeltijd en banktijd bij hockey
    Gemaakt voor Anneliese van KHC Dragons
    =========================================================== */
-const APP_VERSION = "3.3.0";
+const APP_VERSION = "3.3.1";
 const APP_NAME = "Hockey Bench Manager";
 const CONTACT_MAIL = "bvherck79@gmail.com";
 const DATA_VERSION = 2;
@@ -1296,17 +1296,22 @@ function createTeamFlow(){
 }
 let carrySel = null;
 function carryStart(newId){
-  const others = S.seasons.filter(s=> s.id !== newId && Object.keys(s.roster||{}).length);
+  /* enkel teams van dezelfde club; het team met dezelfde naam (vorige seizoenen) bovenaan */
+  const nw = S.seasons.find(s=> s.id === newId);
+  const sameClub = s=> nw && ((nw.clubId && s.clubId === nw.clubId) || normClub(clubName(s)) === normClub(clubName(nw)));
+  const sameTeam = s=> nw && normName(s.team) === normName(nw.team);
+  const others = S.seasons.filter(s=> s.id !== newId && Object.keys(s.roster||{}).length && sameClub(s))
+    .sort((a,b)=> (sameTeam(b) - sameTeam(a)) || ((seasonYear(b.name)||0) - (seasonYear(a.name)||0)) || ((b.created||0) - (a.created||0)));
   if(!others.length){ go("roster"); return; }
   if(others.length === 1){ carrySheet(newId, others[0].id); return; }
-  let h = '<p class="muted">Uit welk team wil je spelers overnemen?</p><div class="card">';
+  let h = '<p class="muted">Wil je spelers overnemen uit een ander team van '+esc(clubName(nw))+'? Ze worden gekopieerd; beide spelerslijsten blijven daarna los van elkaar.</p><div class="card">';
   others.forEach(s=>{
     h += '<button class="opt" onclick="carrySheet(\''+newId+'\',\''+s.id+'\')"><span style="flex:1">'+
       '<span style="display:block">'+esc(teamLabel(s))+'</span>'+
       '<span style="display:block;font-size:13px;color:var(--text2)">'+esc(s.name)+' · '+Object.keys(s.roster).length+' spelers</span></span>'+
       '<span class="chev">'+svg.chev+'</span></button>';
   });
-  h += '</div><div class="pad"><button class="btn ghost" onclick="closeModal();go(\'season\')">Leeg beginnen</button></div>';
+  h += '</div><div class="pad"><button class="btn ghost" onclick="closeModal();go(\'roster\')">Leeg beginnen</button></div>';
   openModal("Spelers overnemen", h);
 }
 function carrySheet(newId, srcId){
@@ -1314,7 +1319,7 @@ function carrySheet(newId, srcId){
   if(!src){ go("season"); return; }
   const ns = Object.keys(src.roster).sort((a,b)=>a-b);
   carrySel = new Set(ns);
-  let h = '<p class="muted">Kies wie mee overgaat naar het nieuwe team. Je kan later altijd nummers bijzetten.</p>';
+  let h = '<p class="muted">Uit <b>'+esc(teamLabel(src))+'</b> ('+esc(src.name)+'). Kies wie mee overgaat naar het nieuwe team. De namen worden gekopieerd; je kan later altijd nummers bijzetten.</p>';
   h += '<div class="pad" style="padding-bottom:8px;display:flex;gap:8px">'+
        '<button class="btn ghost" id="cAll" style="height:40px;font-size:15px">Allemaal</button>'+
        '<button class="btn ghost" id="cNone" style="height:40px;font-size:15px">Geen</button></div>';
@@ -1327,7 +1332,7 @@ function carrySheet(newId, srcId){
       '<span class="mk" style="color:var(--tint);font-weight:700;font-size:18px;width:20px;text-align:center">✓</span></button>';
   });
   h += '</div><div class="pad"><button class="btn" id="cGo"></button></div>'+
-       '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal();go(\'season\')">Leeg beginnen</button></div>';
+       '<div class="pad" style="padding-top:0"><button class="btn ghost" onclick="closeModal();go(\'roster\')">Leeg beginnen</button></div>';
   openModal("Spelers overnemen", h, { onMount(mo){
     const upd = ()=>{
       mo.querySelector("#cGo").textContent = carrySel.size
