@@ -156,8 +156,14 @@ button.row:active{background:var(--fill)}
 .chip.sus.c-geel b,.chip.sus.c-geel .tt{color:var(--cy);font-weight:700}
 .chip.bench.next{border-color:var(--bench);background:var(--bench-soft)}
 .pl.field.ready{border-color:var(--tint);animation:puls 1.1s ease-in-out infinite}
+.pl.susp.back{animation:knip .7s ease-in-out infinite}
+.pl.susp.back .n{background:var(--cg)!important;color:#fff!important}
+.now.back{color:var(--cg);font-weight:700}
+.chip.sus.back{animation:knip .7s ease-in-out infinite;background:var(--cg-soft);border-color:var(--cg)}
+.chip.sus.back b,.chip.sus.back .tt{color:var(--cg)!important;font-weight:700}
+@keyframes knip{0%,100%{opacity:1}50%{opacity:.25}}
 @keyframes puls{0%,100%{opacity:1}50%{opacity:.55}}
-@media (prefers-reduced-motion:reduce){.pl.field.ready{animation:none}}
+@media (prefers-reduced-motion:reduce){.pl.field.ready{animation:none}.pl.susp.back,.chip.sus.back{animation:none;outline:3px solid var(--cg)}}
 .chip-empty{font-size:12.5px;color:var(--text3);padding:10px 2px}
 
 .dock{flex:0 0 auto;background:color-mix(in srgb, var(--surface) 92%, transparent);
@@ -228,6 +234,7 @@ table.st tr:last-child td{border-bottom:0}
 .syncdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--cg)}
 .syncdot.wait{background:var(--bench)}
 .syncdot.off{background:var(--text3)}
+.stp{width:40px;height:36px;border-radius:10px;background:var(--tint-soft);color:var(--tint);font-size:22px;font-weight:600;line-height:1}
 .viewbar{flex:1;display:flex;align-items:center;gap:12px;min-height:52px;padding:0 4px}
 .viewbar .eye{color:var(--tint);display:flex}
 .viewbar .grow{flex:1;min-width:0}
@@ -256,7 +263,7 @@ table.st tr:last-child td{border-bottom:0}
    Hockey Bench Manager — speeltijd en banktijd bij hockey
    Gemaakt voor Anneliese van KHC Dragons
    =========================================================== */
-const APP_VERSION = "3.3.1";
+const APP_VERSION = "3.3.2";
 const APP_NAME = "Hockey Bench Manager";
 const CONTACT_MAIL = "bvherck79@gmail.com";
 const DATA_VERSION = 2;
@@ -825,6 +832,7 @@ setInterval(()=>{
 }, 60000);
 
 /* ---------- model ---------- */
+const BACK_MS = 15000;   /* na de straf: zo lang knippert de speler "mag terug" */
 const CARD_DEF = { groen:{label:"Groene kaart", ms:120000}, geel:{label:"Gele kaart", ms:300000}, rood:{label:"Rode kaart", ms:null} };
 function season(){ return S.seasons.find(s=>s.id===S.activeSeason) || null; }
 function match(){ const se = season(); if(!se) return null; return se.matches.find(m=>m.id===S.openMatch) || null; }
@@ -909,7 +917,7 @@ function newMatch(se, d){
     score:{ us:0, them:0 }, players:{}, log:[], ctrl:myCtrl(1) };
   d.squad.forEach(p=>{
     m.players[p.n] = { n:p.n, f:p.f||"", l:p.l||"", status:p.start?"field":"bench",
-      fieldMs:0, benchMs:0, suspMs:0, subs:0, since:0, longestBench:0, cards:[], susp:null, ready:false, goals:0 };
+      fieldMs:0, benchMs:0, suspMs:0, subs:0, since:0, longestBench:0, cards:[], susp:null, ready:false, goals:0, bn:p.start?0:1 };
   });
   se.matches.unshift(m); return m;
 }
@@ -919,6 +927,12 @@ function elapsedTotal(m){ let t = 0; for(let i=0;i<m.clock.parts.length;i++) t +
 function liveOf(p,T){ const d = Math.max(0, T - p.since);
   return { field:p.fieldMs + (p.status==="field"?d:0), bench:p.benchMs + (p.status==="bench"?d:0),
            susp:p.suspMs + (p.status==="susp"?d:0), spell:d }; }
+/* "2× bank · 6:40 op de bank" voor wie op het veld staat */
+function benchInfo(p, L){
+  const k = p.bn != null ? p.bn : null;
+  if(k === 0) return "nog niet op de bank";
+  return (k != null ? k + "× bank · " : "") + mmss(L.bench) + " op de bank";
+}
 function commit(m,p,T){
   const d = Math.max(0, T - p.since);
   if(p.status==="field") p.fieldMs += d;
@@ -976,7 +990,7 @@ function nudgeClock(ms){
   if(c.running) c.since = Date.now();
   const T = elapsedTotal(m);
   playersArr(m).forEach(p=>{ if(p.since > T) p.since = T; });
-  logEv(m, (ms>0?"+":"−") + (Math.abs(ms)>=60000 ? Math.abs(Math.round(ms/60000))+" min" : Math.abs(ms/1000)+" sec") + " op de klok");
+  logEv(m, "Wedstrijdtijd " + (ms < 0 ? "verlengd" : "ingekort") + " met " + mmss(Math.abs(ms)));
   save(true); paint();
 }
 function endPart(){
@@ -1007,7 +1021,7 @@ function sub(outN, inN){
   if(!a || !b) return;
   commit(m,a,T); commit(m,b,T);
   a.status = "bench"; b.status = "field"; a.ready = false; b.ready = false;
-  a.subs++; b.subs++;
+  a.subs++; b.subs++; a.bn = (a.bn||0) + 1;
   logEv(m, b.n + " " + dispName(b) + " in voor " + a.n + " " + dispName(a));
   save(true); renderMatch();
   toast(b.n + " in · " + a.n + " uit");
@@ -1026,7 +1040,9 @@ function giveCard(n, type){
 function backFromSusp(n, toField){
   if(!ctl()) return;
   const m = match(); const T = elapsedTotal(m), p = m.players[n];
-  commit(m,p,T); p.status = toField ? "field" : "bench"; p.susp = null; p.ready = false;
+  const at = (p.susp && T >= p.susp.until) ? p.susp.until : T;
+  commit(m,p,at); p.status = toField ? "field" : "bench"; p.susp = null; p.ready = false;
+  if(!toField) p.bn = (p.bn||0) + 1;
   logEv(m, p.n + " " + dispName(p) + " terug " + (toField ? "op het veld" : "op de bank"));
   save(true); closeModal(); renderMatch();
 }
@@ -1642,7 +1658,7 @@ function renderMatch(){
   const dock = $("#dock"); dock.hidden = false; dock.className = "dock";
   if(isViewer(m)){
     dock.innerHTML = '<div class="viewbar"><span class="eye">'+svg.eye+'</span><div class="grow"><div class="t">Je kijkt mee</div><div class="s" id="vbSub"></div></div>'+
-      '<button class="takebtn" onclick="askTakeover()">Overnemen</button></div>';
+      '<button class="nav-btn txt" style="height:44px" onclick="logSheet()">Verloop</button><button class="takebtn" onclick="askTakeover()">Overnemen</button></div>';
     paint(); return;
   }
   dock.innerHTML =
@@ -1681,11 +1697,17 @@ function paint(){
 
   let fired = null;
   playersArr(m).forEach(p=>{
-    if(C && p.status === "susp" && p.susp && T >= p.susp.until){
-      const until = p.susp.until;
-      commit(m,p,until); p.status = "field"; p.since = until; p.ready = true; p.susp = null;
-      logEv(m, p.n + " " + dispName(p) + " straf afgelopen — terug het veld in");
+    if(C && p.status === "susp" && p.susp && !p.susp.back && T >= p.susp.until){
+      p.susp.back = true;
+      logEv(m, p.n + " " + dispName(p) + " straf afgelopen — mag terug het veld in");
       fired = p;
+    }
+    if(C && p.status === "susp" && p.susp && p.susp.back && T >= p.susp.until + BACK_MS){
+      /* na het knipperen vanzelf op het veld; de speeltijd telt vanaf het einde van de straf */
+      const until = p.susp.until;
+      commit(m,p,until); p.status = "field"; p.since = until; p.ready = false; p.susp = null;
+      logEv(m, p.n + " " + dispName(p) + " terug op het veld");
+      save(true);
     }
     if(C && p.ready && p.status === "field" && T - p.since > 12000) p.ready = false;
     const L = liveOf(p,T), q = s=> document.querySelector('['+s+'="'+CSS.escape(String(p.n))+'"]');
@@ -1696,27 +1718,29 @@ function paint(){
     if(gb){ gb.hidden = !p.goals; gb.textContent = p.goals || 0; }
     if(now){
       if(p.status === "bench"){ now.hidden = false; now.className = "now num"; now.textContent = "nu " + mmss(L.spell); }
+      else if(p.status === "susp" && p.susp && (p.susp.back || T >= p.susp.until)){ now.hidden = false; now.className = "now back"; now.textContent = "mag terug!"; }
       else if(p.status === "susp" && p.susp){ now.hidden = false; now.className = "now num sus"; now.textContent = "straf " + mmss(Math.max(0, p.susp.until - T)); }
       else now.hidden = true;
     }
     const card = document.querySelector('.pl[data-p="'+CSS.escape(String(p.n))+'"]');
     if(card){
-      const want = "pl " + p.status + (p.status==="susp" && p.susp ? " c-"+p.susp.type : "") + (p.ready && p.status==="field" ? " ready" : "");
+      const want = "pl " + p.status + (p.status==="susp" && p.susp ? " c-"+p.susp.type + (p.susp.back || T >= p.susp.until ? " back" : "") : "") + (p.ready && p.status==="field" ? " ready" : "");
       if(card.className !== want) card.className = want;
     }
   });
-  if(fired){ save(true); alarm(); toast("Straf afgelopen — " + fired.n + " " + dispName(fired) + " staat weer op het veld", 4600); }
+  if(fired){ save(true); alarm(); toast("Straf afgelopen — " + fired.n + " " + dispName(fired) + " mag terug het veld in", 5000); }
 
   const strip = $("#strip");
   const bench = benchByWait(m);
   const susp  = suspBySoonest(m);
-  const sig = susp.map(p=>p.n+p.susp.type).join()+"|"+bench.map(p=>p.n).join();
+  const isBack = p=> p.susp.back || T >= p.susp.until;
+  const sig = susp.map(p=>p.n+p.susp.type+(isBack(p)?"b":"")).join()+"|"+bench.map(p=>p.n).join();
   if(strip.dataset.sig !== sig){
     strip.dataset.sig = sig;
     let sh = "";
     if(susp.length){
       sh += '<h6>Straftijd</h6><div class="chips">' + susp.map(p=>
-        '<button class="chip sus c-'+p.susp.type+'" onclick="playerSheet(\''+esc(p.n)+'\')"><b class="num">'+esc(p.n)+'</b><span class="tt">0:00</span></button>').join("") + '</div>';
+        '<button class="chip sus c-'+p.susp.type+(isBack(p)?' back':'')+'" onclick="playerSheet(\''+esc(p.n)+'\')"><b class="num">'+esc(p.n)+'</b><span class="tt">0:00</span></button>').join("") + '</div>';
     }
     sh += '<h6>Bank — ' + bench.length + (bench.length > 1 ? ' · langst eerst' : '') + '</h6><div class="chips">';
     sh += bench.length ? bench.map((p,i)=>
@@ -1727,7 +1751,7 @@ function paint(){
   }
   const chips = strip.querySelectorAll(".chip");
   let i = 0;
-  susp.forEach(p=>{ const el = chips[i++]; if(el) el.querySelector(".tt").textContent = mmss(Math.max(0, p.susp.until - T)); });
+  susp.forEach(p=>{ const el = chips[i++]; if(el) el.querySelector(".tt").textContent = isBack(p) ? "terug!" : mmss(Math.max(0, p.susp.until - T)); });
   bench.forEach(p=>{ const el = chips[i++]; if(el) el.querySelector(".tt").textContent = mmss(liveOf(p,T).spell); });
   document.querySelectorAll("[data-sc]").forEach(el=>{ el.textContent = m.score[el.dataset.sc]; });
   const vb = document.getElementById("vbSub");
@@ -1748,6 +1772,7 @@ function playerSheet(n){
   h += '<div class="row"><div class="grow"><div class="t">Op het veld</div></div><div class="v num" style="color:var(--tint);font-weight:600">'+mmss(L.field)+'</div></div>';
   h += '<div class="row"><div class="grow"><div class="t">Op de bank</div>'+(p.status==="bench"?'<div class="s">deze beurt '+mmss(L.spell)+'</div>':'')+
        '</div><div class="v num" style="color:var(--bench);font-weight:600">'+mmss(L.bench)+'</div></div>';
+  if(p.bn != null) h += '<div class="row"><div class="grow"><div class="t">Keer op de bank</div></div><div class="v num">'+p.bn+'</div></div>';
   h += '<div class="row"><div class="grow"><div class="t">Keer gewisseld</div></div><div class="v num">'+p.subs+'</div></div>';
   if(p.goals) h += '<div class="row"><div class="grow"><div class="t">Doelpunten</div></div><div class="v num">'+p.goals+'</div></div>';
   if(p.cards.length) h += '<div class="row"><div class="grow"><div class="t">Kaarten</div></div><div class="v">'+p.cards.map(c=>CARD_DEF[c.type].label.split(" ")[0]).join(", ")+'</div></div>';
@@ -1770,13 +1795,14 @@ function playerSheet(n){
     onFieldNow(m).forEach(f=>{
       const FL = liveOf(f,T);
       h += '<button class="opt" onclick="sub(\''+esc(f.n)+'\',\''+esc(p.n)+'\');closeModal()"><span class="badge f num">'+esc(f.n)+'</span>'+
-        '<span style="flex:1"><span style="display:block">'+esc(dispName(f))+'</span><span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(FL.field)+' gespeeld</span></span></button>';
+        '<span style="flex:1"><span style="display:block">'+esc(dispName(f))+'</span><span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(FL.field)+' gespeeld · '+benchInfo(f,FL)+'</span></span></button>';
     });
     h += '</div>';
   } else if(p.status === "susp"){
-    h += '<div class="sec">Straf — nog '+mmss(Math.max(0,p.susp.until-T))+'</div><div class="card">'+
-      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',true)"><span style="flex:1">Straf beëindigen, terug het veld in</span></button>'+
-      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',false)"><span style="flex:1">Straf beëindigen, naar de bank</span></button></div>';
+    const done = T >= p.susp.until;
+    h += '<div class="sec">'+(done ? 'Straf afgelopen — mag terug' : 'Straf — nog '+mmss(Math.max(0,p.susp.until-T)))+'</div><div class="card">'+
+      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',true)"><span style="flex:1">'+(done?'Terug het veld in':'Straf beëindigen, terug het veld in')+'</span></button>'+
+      '<button class="opt" onclick="backFromSusp(\''+esc(p.n)+'\',false)"><span style="flex:1">'+(done?'Naar de bank':'Straf beëindigen, naar de bank')+'</span></button></div>';
   } else {
     h += '<div class="sec">Rode kaart</div><div class="card"><div class="row"><div class="s">Deze speler doet niet meer mee.</div></div></div>';
   }
@@ -1823,7 +1849,7 @@ function drawSubSheet(){
       const L = liveOf(f,T);
       h += '<button class="opt" onclick="pickOff(\''+esc(f.n)+'\')"><span class="badge f num">'+esc(f.n)+'</span>'+
         '<span style="flex:1"><span style="display:block">'+esc(dispName(f))+'</span>'+
-        '<span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(L.field)+' gespeeld · '+f.subs+' wissels</span></span>'+
+        '<span style="display:block;font-size:13px;color:var(--text2)" class="num">'+mmss(L.field)+' gespeeld · '+benchInfo(f,L)+'</span></span>'+
         '<span class="chev">'+svg.chev+'</span></button>';
     });
     h += '</div><div style="height:12px"></div>';
@@ -1852,11 +1878,24 @@ function cardSheet(){
   const cands = playersArr(m).filter(p=>p.status==="field" || p.status==="bench");
   let h = '<p class="muted">Kies de speler, daarna de kaart.</p><div class="card">';
   cands.forEach(p=>{
-    h += '<button class="opt" onclick="playerSheet(\''+esc(p.n)+'\')"><span class="badge '+(p.status==="field"?"f":"b")+' num">'+esc(p.n)+'</span>'+
+    h += '<button class="opt" onclick="cardTypeSheet(\''+esc(p.n)+'\')"><span class="badge '+(p.status==="field"?"f":"b")+' num">'+esc(p.n)+'</span>'+
       '<span style="flex:1">'+esc(dispName(p))+'</span><span style="font-size:13px;color:var(--text2)">'+(p.status==="field"?"veld":"bank")+'</span></button>';
   });
   h += '</div><div style="height:12px"></div>';
   openModal("Kaart geven", h);
+}
+/* knop Kaart: na de speler meteen de kaart kiezen */
+function cardTypeSheet(n){
+  if(!ctl()) return;
+  const m = match(), p = m && m.players[n]; if(!p) return;
+  let h = '<div class="card">';
+  ["groen","geel","rood"].forEach(t=>{
+    const d = CARD_DEF[t];
+    h += '<button class="opt" onclick="giveCard(\''+esc(p.n)+'\',\''+t+'\')"><span class="dot '+t+'"></span><span style="flex:1">'+d.label+'</span>'+
+      '<span style="color:var(--text2);font-size:14px">'+(d.ms?(d.ms/60000)+" min":"rest van de wedstrijd")+'</span></button>';
+  });
+  h += '</div><div class="pad"><button class="btn ghost" onclick="cardSheet()">Andere speler</button></div>';
+  openModal("Kaart voor " + p.n + " · " + dispName(p), h);
 }
 function goalSheet(side){
   if(!ctl()) return;
@@ -1882,11 +1921,8 @@ function moreSheet(){
   h += '<button class="opt" onclick="addPlayerSheet()"><span style="flex:1">Speler toevoegen</span>'+
        '<span style="color:var(--text2);font-size:14px">komt op de bank</span></button>';
   h += '<button class="opt" onclick="removePlayerSheet()"><span style="flex:1">Speler verwijderen</span></button></div>';
-  h += '<div class="sec">Klok bijstellen</div><div class="card">';
-  h += '<button class="opt" onclick="nudgeClock(60000);closeModal()"><span style="flex:1">Eén minuut bijtellen</span><span style="color:var(--text2);font-size:14px">te laat gestart</span></button>';
-  h += '<button class="opt" onclick="nudgeClock(-60000);closeModal()"><span style="flex:1">Eén minuut aftrekken</span><span style="color:var(--text2);font-size:14px">te vroeg gestart</span></button>';
-  h += '<button class="opt" onclick="nudgeClock(10000);closeModal()"><span style="flex:1">Tien seconden bijtellen</span></button>';
-  h += '<button class="opt" onclick="nudgeClock(-10000);closeModal()"><span style="flex:1">Tien seconden aftrekken</span></button></div>';
+  h += '<div class="sec">Klok</div><div class="card">';
+  h += '<button class="opt" onclick="clockSheet()"><span style="flex:1">Wedstrijdtijd bijstellen</span><span style="color:var(--text2);font-size:14px">verlengen of inkorten</span></button></div>';
   h += '<div class="sec">Wedstrijd</div><div class="card">';
   if(m.clock.part < m.cfg.parts-1)
     h += '<button class="opt" onclick="endPart()"><span style="flex:1">Einde '+part+'</span><span style="color:var(--text2);font-size:14px">volgende deel klaarzetten</span></button>';
@@ -1895,10 +1931,67 @@ function moreSheet(){
   if(last.length){
     h += '<div class="sec">Laatste gebeurtenissen</div><div class="card">';
     last.forEach(l=> h += '<div class="logline"><span class="lt num">'+mmss(l.t)+'</span><span>'+esc(l.text)+'</span></div>');
+    if(m.log.length > last.length)
+      h += '<button class="opt" onclick="logSheet()"><span style="flex:1;color:var(--tint)">Volledig verloop</span><span style="color:var(--text2);font-size:14px">'+m.log.length+' gebeurtenissen</span></button>';
     h += '</div>';
   }
   h += '<div class="ver">'+APP_NAME+' '+APP_VERSION+'</div>';
   openModal("Meer", h);
+}
+/* het hele verloop van de wedstrijd, nieuwste eerst, per 30 */
+let LOGN = 30;
+function logBody(){
+  const m = match(); if(!m) return "";
+  const all = m.log.slice().reverse(), shown = all.slice(0, LOGN);
+  const manyBy = new Set(m.log.map(l=> l.by).filter(Boolean)).size > 1;
+  let h = '<div class="card">';
+  shown.forEach(l=> h += '<div class="logline"><span class="lt num">'+mmss(l.t)+'</span><span>'+esc(l.text)+'</span>'+
+    (manyBy && l.by ? '<span class="by">'+esc(l.by)+'</span>' : '')+'</div>');
+  h += '</div>';
+  if(all.length > LOGN) h += '<div class="pad"><button class="btn ghost" id="logMore">Laad meer (nog '+(all.length - LOGN)+')</button></div>';
+  else h += '<p class="muted" style="text-align:center">Begin van de wedstrijd</p>';
+  return h;
+}
+function logSheet(){
+  const m = match(); if(!m) return;
+  LOGN = 30;
+  const wire = mo=>{ const b = mo.querySelector("#logMore"); if(b) b.onclick = ()=>{ LOGN += 30; mo.querySelector(".mb").innerHTML = logBody(); wire(mo); }; };
+  openModal("Verloop", logBody(), { onMount: wire });
+}
+/* wedstrijdtijd verlengen of inkorten, in minuten en seconden */
+function clockSheet(){
+  if(!ctl()) return;
+  const m = match(); if(!m) return;
+  const left = ()=>{ const c = m.clock, lim = m.cfg.partMin * 60000, pm = elapsedPart(m, c.part);
+    return pm >= lim ? "extra tijd +" + mmss(pm - lim) : "nog " + mmss(lim - pm) + " in " + ordinalPart(c.part, m.cfg.parts).toLowerCase(); };
+  openModal("Wedstrijdtijd bijstellen",
+    '<p class="muted" id="ckNow" style="text-align:center;font-size:17px;color:var(--text)">'+esc(left())+'</p>'+
+    '<div class="card"><div class="row"><div class="grow"><div class="t">Minuten</div></div>'+
+      '<div class="seg" style="width:auto;display:flex;align-items:center;gap:6px"><button class="stp" data-d="m" data-v="-1">−</button><b class="num" id="ckM" style="min-width:28px;text-align:center">0</b><button class="stp" data-d="m" data-v="1">+</button></div></div>'+
+    '<div class="row"><div class="grow"><div class="t">Seconden</div></div>'+
+      '<div class="seg" style="width:auto;display:flex;align-items:center;gap:6px"><button class="stp" data-d="s" data-v="-5">−</button><b class="num" id="ckS" style="min-width:28px;text-align:center">0</b><button class="stp" data-d="s" data-v="5">+</button></div></div></div>'+
+    '<p class="muted">Verlengen: er blijft meer tijd over (klok te vroeg gestart). Inkorten: er blijft minder tijd over (klok te laat gestart).</p>'+
+    '<div class="pad" style="display:flex;gap:10px"><button class="btn" id="ckLong" style="flex:1">Verlengen</button><button class="btn" id="ckShort" style="flex:1">Inkorten</button></div>',
+    { onMount(mo){
+        let mm = 0, ss = 0;
+        const show = ()=>{ mo.querySelector("#ckM").textContent = mm; mo.querySelector("#ckS").textContent = String(ss).padStart(2,"0"); };
+        mo.querySelectorAll(".stp").forEach(b=> b.onclick = ()=>{
+          const v = +b.dataset.v;
+          if(b.dataset.d === "m") mm = Math.max(0, Math.min(30, mm + v));
+          else { ss += v; if(ss < 0) ss = 55; if(ss > 55) ss = 0; }
+          show();
+        });
+        const apply = sign=>{
+          const ms = (mm * 60 + ss) * 1000;
+          if(!ms){ toast("Kies eerst minuten of seconden"); return; }
+          nudgeClock(sign * ms);
+          mo.querySelector("#ckNow").textContent = left();
+          toast("Wedstrijdtijd " + (sign < 0 ? "verlengd" : "ingekort") + " met " + mmss(ms));
+        };
+        mo.querySelector("#ckLong").onclick = ()=> apply(-1);
+        mo.querySelector("#ckShort").onclick = ()=> apply(1);
+        show();
+      }});
 }
 function addPlayerSheet(){
   if(!ctl()) return;
@@ -1980,7 +2073,7 @@ function addLatePlayer(n, f, l){
   l = String(l||"").trim() || r.l || "";
   const T = elapsedTotal(m);
   m.players[n] = { n, f, l, status:"bench", fieldMs:0, benchMs:0, suspMs:0, subs:0,
-                   since:T, longestBench:0, cards:[], susp:null, ready:false, goals:0 };
+                   since:T, longestBench:0, cards:[], susp:null, ready:false, goals:0, bn:1 };
   se.roster[n] = { f, l };
   logEv(m, n + " " + dispName(m.players[n]) + " toegevoegd aan de selectie");
   save(true); closeModal(); renderMatch();

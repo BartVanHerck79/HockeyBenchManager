@@ -1,4 +1,4 @@
-HOCKEY BENCH MANAGER 3.3.1 — bestanden voor GitHub Pages
+HOCKEY BENCH MANAGER 3.3.2 — bestanden voor GitHub Pages
 =========================================================
 
 Speeltijd en banktijd bijhouden tijdens een hockeywedstrijd.
@@ -6,28 +6,38 @@ Adres: https://bartvanherck79.github.io/HockeyBenchManager/
 Vragen of ideeën: bvherck79@gmail.com
 
 
-WAT IS ER NIEUW IN 3.3.1
+WAT IS ER NIEUW IN 3.3.2
 ------------------------
-- Spelers overnemen bij een nieuw team: de app biedt enkel nog teams van
-  dezelfde club aan. Het team met dezelfde naam uit een vorig seizoen
-  staat bovenaan.
-- Is er geen ander team van die club, dan opent de app meteen de lege
-  spelerslijst.
-- De uitleg zegt nu duidelijk dat spelers gekopieerd worden: daarna staan
-  beide spelerslijsten los van elkaar.
-
-Ter info: spelers van verschillende teams lopen nooit door elkaar. Elk
-team heeft zijn eigen spelerslijst, wedstrijden en statistieken. Wie de
-U15 en de U19 helpt, heeft twee aparte teams.
+- Kaart geven via de knop Kaart: na het kiezen van de speler kies je
+  meteen de kaart. Vroeger opende het volledige spelerscherm met eerst
+  de wissel.
+- Einde van een straf: de speler blijft minstens 15 seconden in de
+  strafzone staan, knipperend in het groen met "mag terug!", zodat
+  duidelijk is dat die terug het veld in mag. Daarna gaat hij vanzelf
+  naar het veld. Tik je op de speler, dan kan je hem ook meteen terug
+  het veld in of naar de bank sturen. De speeltijd telt in elk geval
+  vanaf het einde van de straf.
+- Wedstrijdtijd bijstellen: Meer -> Wedstrijdtijd bijstellen. Kies
+  minuten en seconden en tik op Verlengen (er blijft meer tijd over) of
+  Inkorten (er blijft minder tijd over). Je ziet meteen hoeveel tijd er
+  nog rest. Dat vervangt "minuut bijtellen/aftrekken", wat verwarrend was
+  nu de klok aftelt.
+- Wisselen door op een speler te tikken: bij de spelers op het veld zie
+  je nu ook hoeveel keer ze al op de bank zaten en hoelang in totaal
+  (bv. "12:40 gespeeld · 2× bank · 6:10 op de bank"). Ook in de knop
+  Wissel. Op de spelerskaart staat "Keer op de bank".
+- Volledig verloop: onder Meer staat "Volledig verloop". Je ziet de
+  laatste 30 gebeurtenissen, met "Laad meer" voor de rest. Ook wie
+  meekijkt heeft onderaan een knop Verloop.
 
 
 DE BESTANDEN IN DIT PAKKET
 --------------------------
 Enkel wat veranderd is:
 
-  index.html                GEWIJZIGD in 3.3.1
-  sw.js                     GEWIJZIGD in 3.3.1
-  README.txt                GEWIJZIGD in 3.3.1
+  index.html                GEWIJZIGD in 3.3.2
+  sw.js                     GEWIJZIGD in 3.3.2
+  README.txt                GEWIJZIGD in 3.3.2
 
 Ongewijzigd, dus laten staan:
   firestore.rules (sinds 3.3.0, hoeft niet opnieuw in Firebase)
@@ -38,19 +48,31 @@ INSTALLEREN
 -----------
 1. Upload index.html, sw.js en README.txt naar de repository
    HockeyBenchManager.
-2. Open de app en tik op Vernieuwen in de blauwe balk.
+2. Open de app en tik op Vernieuwen in de blauwe balk. Doe dat niet
+   midden in een wedstrijd.
+
+
+GOED OM TE WETEN
+----------------
+- De 15 seconden "mag terug" lopen op de wedstrijdklok. Staat de klok
+  stil, dan blijft de speler knipperen tot de klok weer loopt of tot je
+  op hem tikt.
+- "Keer op de bank" telt vanaf deze versie. Bij een wedstrijd die al
+  bezig was voor de update, zie je enkel de tijd op de bank.
 
 
 GETEST
 ------
-Team van een nieuwe club: geen spelers van een andere club aangeboden.
-Team van een bestaande club: enkel teams van die club, het team met
-dezelfde naam bovenaan. De tests van 3.1.1, 3.2 en 3.3 zijn opnieuw
-geslaagd.
+Kaart via de knop Kaart, einde straf (knipperen, na 5 seconden nog in de
+strafzone, na 15 seconden op het veld, speeltijd vanaf het einde van de
+straf), bank-info in beide wisselschermen, wedstrijdtijd verlengen en
+inkorten met 1:15, en het volledige verloop met Laad meer. De tests van
+3.1.1, 3.2 en 3.3 zijn opnieuw geslaagd.
 
 
 EERDERE VERSIES
 ---------------
+3.3.1  Spelers overnemen enkel uit dezelfde club.
 3.3.0  Prullenbak, waarschuwing voor dubbele wedstrijden, nieuw seizoen.
 3.2.0  Spelers beheren zonder wedstrijd, live meekijken, bediening
        overnemen.
